@@ -1,0 +1,12 @@
+# LunaGuard Storage Service Dependencies
+
+# FastAPI and web framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Database
+asyncpg>=0.29.0
+
+# Development dependencies (optional)
+pytest>=7.4.0
+httpx>=0.25.0
