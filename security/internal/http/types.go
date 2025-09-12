@@ -1,23 +1,5 @@
 package http
 
-type EncryptRequest struct {
-	Data      string `json:"data" binding:"required"`
-	KeyPhrase string `json:"keyPhrase" binding:"required"`
-}
-
-type EncryptResponse struct {
-	Data string `json:"data"`
-}
-
-type DecryptRequest struct {
-	Data      string `json:"data" binding:"required"`
-	KeyPhrase string `json:"keyPhrase" binding:"required"`
-}
-
-type DecryptResponse struct {
-	Data string `json:"data"`
-}
-
 type RegisterRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=8,max=128"`

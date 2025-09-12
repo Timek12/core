@@ -25,7 +25,7 @@ type User struct {
 	AvatarURL      string    `json:"avatar_url,omitempty"`
 	AuthMethod     string    `json:"auth_method"`
 	Provider       string    `json:"provider,omitempty"`
-	PasswordHash   string    `json:"-"` // Never serialize password hash
+	PasswordHash   string    `json:"-"` 
 	EmailVerified  bool      `json:"email_verified"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`

@@ -57,10 +57,6 @@ func main() {
 	// Add middleware
 	router.Use(gin.Recovery())
 	router.Use(gin.Logger())
-	// Custom logger that skips /user endpoint to reduce spam
-	// router.Use(gin.LoggerWithConfig(gin.LoggerConfig{
-	// 	SkipPaths: []string{"/user"},
-	// }))
 
 	// Health check
 	router.GET("/health", http.HandleHealth)
@@ -75,8 +71,6 @@ func main() {
 	router.POST("/register", http.HandleRegister)
 	router.POST("/login", http.HandleLogin)
 	router.POST("/refresh", http.HandleRefreshToken)
-
-	router.GET("/:provider/profile", http.HandleProviderProfile)
 	
 	// Get port from environment or default to 8080
 	port := os.Getenv("PORT")
@@ -84,5 +78,5 @@ func main() {
 		port = "8080"
 	}
 	
-	router.Run("0.0.0.0:" + port)
+	router.Run("127.0.0.1:" + port)
 }

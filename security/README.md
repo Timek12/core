@@ -20,7 +20,7 @@ The **LunaGuard Security** service combines authentication, authorization, and a
   - Token rotation and revocation
   - Device tracking and session management
 
-### 2. **Network Control & Policies**
+### 2. **Network Control & Policies** (planned)
 
 - **Access Control Lists (ACLs)**
   - IP-based access restrictions
@@ -33,7 +33,7 @@ The **LunaGuard Security** service combines authentication, authorization, and a
   - Automatic threat detection and blocking
   - Traffic shaping and prioritization
 
-### 3. **Security Policy Enforcement**
+### 3. **Security Policy Enforcement** (planned)
 
 - **Policy Engine**
   - RBAC (Role-Based Access Control)
@@ -45,7 +45,7 @@ The **LunaGuard Security** service combines authentication, authorization, and a
   - Real-time security monitoring
   - Automated incident response
 
-### 4. **Advanced Security Features**
+### 4. **Advanced Security Features** (planned)
 
 - **Threat Detection**
   - Anomaly detection for login patterns
@@ -119,56 +119,12 @@ The security service acts as the primary gateway, validating all requests before
   - Hardware security keys (WebAuthn)
   - Backup codes
 
-### Network Security
-
-- **IP Access Control**
-
-  - Allowlist/blocklist management
-  - CIDR range support
-  - Dynamic IP reputation scoring
-  - Geo-blocking capabilities
-
-- **DDoS Protection**
-
-  - Rate limiting per endpoint
-  - Sliding window algorithms
-  - Distributed coordination via Redis
-  - Automatic mitigation responses
-
-- **Traffic Analysis**
-  - Real-time traffic monitoring
-  - Anomaly detection algorithms
-  - Pattern recognition for attacks
-  - Automated response triggers
-
-### Policy Management
-
-- **Role-Based Access Control (RBAC)**
-
-  - Hierarchical role definitions
-  - Permission inheritance
-  - Dynamic role assignment
-  - Role-based resource access
-
-- **Attribute-Based Access Control (ABAC)**
-
-  - Context-aware access decisions
-  - Policy expression language
-  - Real-time attribute evaluation
-  - Fine-grained permissions
-
-- **Security Policies**
-  - Password complexity requirements
-  - Session timeout policies
-  - Account lockout rules
-  - Security question enforcement
-
 ## 📡 API Endpoints
 
 ### Base URL
 
 ```
-http://localhost:8001
+http://localhost:8080
 ```
 
 ### Authentication Endpoints
@@ -214,60 +170,3 @@ GET /auth/google/callback           # OAuth callback
 POST /auth/logout                   # Logout (clears cookies)
 GET /auth/user                      # Current user info
 ```
-
-## 🏗️ Architecture Integration
-
-```mermaid
-graph TB
-    AUTH[LunaGuard-server<br/>Authentication] --> SEC1[LunaGuard-leak-detector]
-    AUTH --> SEC2[LunaGuard-compliance]
-    AUTH --> SEC3[LunaGuard-anomaly]
-    AUTH --> SEC4[LunaGuard-integrations]
-    AUTH --> SEC5[LunaGuard-iac-scanner]
-
-    SEC1 --> ALERT[Alert System]
-    SEC2 --> DASH[Compliance Dashboard]
-    SEC3 --> ML[(ML Models)]
-    SEC4 --> LEGACY[Legacy Systems]
-    SEC5 --> GIT[Git Repositories]
-
-    subgraph "Python Microservices"
-        SEC1
-        SEC2
-        SEC3
-        SEC4
-        SEC5
-    end
-```
-
-## 🚀 Implementation Roadmap
-
-### Phase 1: Core Security
-
-1. **Leak Detection Worker** - High priority for immediate security
-2. **Compliance Checker** - Essential for enterprise adoption
-
-### Phase 2: Advanced Analytics
-
-3. **Anomaly Detection Engine** - ML-powered threat detection
-4. **IaC Compliance Bot** - DevOps integration
-
-### Phase 3: Legacy Support
-
-5. **Integration Scripts** - Enterprise legacy system support
-
-## 🔧 Technology Requirements
-
-- **Runtime**: Python 3.9+
-- **Frameworks**: FastAPI, Celery for async tasks
-- **ML Libraries**: scikit-learn, pandas, numpy
-- **Database**: PostgreSQL (shared with core services)
-- **Message Queue**: Redis/RabbitMQ for task queuing
-- **Monitoring**: Prometheus, Grafana
-- **Containerization**: Docker, Kubernetesal features, build in Python:
-- **Leak Detection Worker** → periodically scans public repos, artifact registries, and CI/CD logs for leaked secrets (using regex + entropy checks).
-- **Security Compliance Checker** → policy evaluation (e.g., secret age, key length) and scoring.
-- **Anomaly Detection Engine** → ML-based detection of unusual secret usage patterns.
-- **Integration Scripts** → for legacy systems that don’t have native Go clients.
-- **IaC Compliance Bot** → scans Terraform/Helm repos for hard-coded secrets before merge.
--

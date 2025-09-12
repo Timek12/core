@@ -88,9 +88,9 @@ func HandleAuthCallback(c *gin.Context) {
 	maxAge := int(7 * 24 * time.Hour.Seconds()) // 7 days
 	secure := false // Set to true in production with HTTPS
 	
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("access_token", tokenPair.AccessToken, int(time.Until(tokenPair.ExpiresAt).Seconds()), "/", "", secure, true)
 	c.SetCookie("refresh_token", tokenPair.RefreshToken, maxAge, "/", "", secure, true)
-	c.SetCookie("token_type", tokenPair.TokenType, maxAge, "/", "", secure, true)
 	
 	// Redirect to frontend with success indicator
 	frontendURL := "http://localhost:3000/auth/callback?success=true"
@@ -134,7 +134,6 @@ func HandleAuthLogout(c *gin.Context) {
 	// Clear authentication cookies
 	c.SetCookie("access_token", "", -1, "/", "", false, true)
 	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
-	c.SetCookie("token_type", "", -1, "/", "", false, true)
 	
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -170,100 +169,6 @@ func setProviderForGoth(c *gin.Context) {
 	q := c.Request.URL.Query()
 	q.Add("provider", c.Param("provider"))
 	c.Request.URL.RawQuery = q.Encode()
-}
-
-// HandleProviderProfile fetches user profile from OAuth provider using stored tokens
-func HandleProviderProfile(c *gin.Context) {
-	// Extract and validate JWT token using unified approach
-	claims, err := ExtractAndValidateToken(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Get refresh token from database using user ID from JWT
-	ctx := context.Background()
-	refreshToken, err := DB.GetRefreshToken(ctx, claims.UserID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No refresh token available, please re-authenticate"})
-		return
-	}
-
-	// Get fresh access token
-	tokenInfo, err := auth.RefreshProviderToken(refreshToken)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to refresh token: %v", err)})
-		return
-	}
-
-	// Make API request to provider (assuming Google for now)
-	req, err := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v1/userinfo?alt=json", nil)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create request"})
-		return
-	}
-	req.Header.Set("Authorization", "Bearer "+tokenInfo.AccessToken)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to fetch profile: %v", err)})
-		return
-	}
-	defer resp.Body.Close()
-
-	var profile map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode profile"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"profile": profile,
-	})
-}
-
-// HandleTokenStatus shows current token status and validity
-func HandleTokenStatus(c *gin.Context) {
-	// Extract and validate JWT token using unified approach
-	claims, err := ExtractAndValidateToken(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Check if refresh token exists
-	ctx := context.Background()
-	refreshToken, err := DB.GetRefreshToken(ctx, claims.UserID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":      err.Error(),
-			"needsAuth":  true,
-			"suggestion": "User needs to re-authenticate with OAuth provider",
-		})
-		return
-	}
-
-	// Try to get a fresh access token
-	tokenInfo, err := auth.RefreshProviderToken(refreshToken)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":      fmt.Sprintf("Failed to refresh token: %v", err),
-			"needsAuth":  true,
-			"suggestion": "User needs to re-authenticate",
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success":         true,
-		"hasValidToken":   true,
-		"tokenPreview":    tokenInfo.AccessToken[:20] + "...", // Show first 20 chars for debugging
-		"hasRefreshToken": true,
-		"expiresAt":       tokenInfo.ExpiresAt,
-		"message":         "Token is valid and ready for API calls",
-	})
 }
 
 // Local Authentication Handlers
@@ -320,11 +225,6 @@ func HandleRegister(c *gin.Context) {
 		return
 	}
 
-	// Set user name if provided
-	if req.Name != "" {
-		user.Name = req.Name
-	}
-
 	// Generate JWT tokens
 	tokenPair, refreshHash, jti, err := JWTService.GenerateTokenPair(user.ID, user.Email)
 	if err != nil {
@@ -352,9 +252,9 @@ func HandleRegister(c *gin.Context) {
 	maxAge := int(7 * 24 * time.Hour.Seconds()) // 7 days
 	secure := false // Set to true in production with HTTPS
 	
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("access_token", tokenPair.AccessToken, int(time.Until(tokenPair.ExpiresAt).Seconds()), "/", "", secure, true)
 	c.SetCookie("refresh_token", tokenPair.RefreshToken, maxAge, "/", "", secure, true)
-	c.SetCookie("token_type", tokenPair.TokenType, maxAge, "/", "", secure, true)
 
 	// Return success response without tokens
 	c.JSON(http.StatusCreated, gin.H{
@@ -428,9 +328,9 @@ func HandleLogin(c *gin.Context) {
 	maxAge := int(7 * 24 * time.Hour.Seconds()) // 7 days
 	secure := false // Set to true in production with HTTPS
 	
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("access_token", tokenPair.AccessToken, int(time.Until(tokenPair.ExpiresAt).Seconds()), "/", "", secure, true)
 	c.SetCookie("refresh_token", tokenPair.RefreshToken, maxAge, "/", "", secure, true)
-	c.SetCookie("token_type", tokenPair.TokenType, maxAge, "/", "", secure, true)
 
 	// Return success response without tokens
 	c.JSON(http.StatusOK, gin.H{
@@ -520,9 +420,9 @@ func HandleRefreshToken(c *gin.Context) {
 	maxAge := int(7 * 24 * time.Hour.Seconds()) // 7 days
 	secure := false // Set to true in production with HTTPS
 	
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("access_token", newTokenPair.AccessToken, int(time.Until(newTokenPair.ExpiresAt).Seconds()), "/", "", secure, true)
 	c.SetCookie("refresh_token", newTokenPair.RefreshToken, maxAge, "/", "", secure, true)
-	c.SetCookie("token_type", newTokenPair.TokenType, maxAge, "/", "", secure, true)
 
 	// Return success response without tokens
 	c.JSON(http.StatusOK, gin.H{
@@ -555,7 +455,6 @@ func HandleLogout(c *gin.Context) {
 	// Clear all authentication cookies
 	c.SetCookie("access_token", "", -1, "/", "", false, true)
 	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
-	c.SetCookie("token_type", "", -1, "/", "", false, true)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

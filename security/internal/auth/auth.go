@@ -49,15 +49,3 @@ func InitAuth() {
 	goth.UseProviders(googleProvider)
 
 }
-
-func AuthStoreUserInSession(session sessions.Session, user goth.User) {
-	session.Set("user_id", user.UserID)
-	session.Set("user_name", user.Name)
-	session.Set("user_email", user.Email)
-	session.Set("user_provider", user.Provider)
-	session.Set("user_avatar_url", user.AvatarURL)
-	session.Set("user_nick_name", user.NickName)
-	session.Set("user_first_name", user.FirstName)
-	session.Set("user_last_name", user.LastName)
-	session.Set("authenticated", true)
-}
