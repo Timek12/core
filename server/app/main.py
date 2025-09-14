@@ -7,6 +7,10 @@ from models.secret import Secret, SecretCreate, SecretUpdate
 
 api = FastAPI()
 
+@api.get('/health')
+def health_check():
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
 now = datetime.now()
 
 all_secrets: List[Secret] = [
