@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -93,7 +94,11 @@ func HandleAuthCallback(c *gin.Context) {
 	c.SetCookie("refresh_token", tokenPair.RefreshToken, maxAge, "/", "", secure, true)
 	
 	// Redirect to frontend with success indicator
-	frontendURL := "http://localhost:3000/auth/callback?success=true"
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3001" // fallback
+	}
+	frontendURL += "/auth/callback?success=true"
 	c.Redirect(http.StatusTemporaryRedirect, frontendURL)
 }
 

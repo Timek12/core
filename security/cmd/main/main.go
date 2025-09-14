@@ -32,7 +32,7 @@ func main() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 	defer db.Close()
-
+	
 	// Initialize services
 	jwtService := auth.NewJWTService([]byte(jwtSecret), "lunaguard-server")
 
@@ -46,7 +46,7 @@ func main() {
 	router := gin.Default()
 
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowOrigins:     []string{"http://localhost:3000", "http://localhost:3001"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -78,5 +78,5 @@ func main() {
 		port = "8080"
 	}
 	
-	router.Run("127.0.0.1:" + port)
+	router.Run("0.0.0.0:" + port)
 }
