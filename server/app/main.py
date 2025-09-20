@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException
 import uuid6
 import uuid
 from datetime import datetime, timedelta
-from models.secret import Secret, SecretCreate, SecretUpdate
+from core.server.app.models.dto.secret import Secret, SecretCreate, SecretUpdate
 
 api = FastAPI()
 
@@ -116,3 +116,6 @@ def delete_secret(secret_id: uuid.UUID):
             return secret
     
     raise HTTPException(status_code=404, detail='Secret not found')    
+
+
+# TODO: Make a functionality to initialize backend storage - encrypted root key, master key and DEK 
