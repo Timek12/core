@@ -1,14 +1,18 @@
-from pydantic import BaseModel, Field
+from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, String, Integer, DateTime, UUID
 import uuid
 from datetime import datetime
 
+Base = declarative_base()
 
-class SecretBase(BaseModel):
-    id: uuid.UUID = Field(..., description='Unique identifier of secret')
-    name: str = Field(..., min_length=5, max_length=256, description='Secret name')
-    description: str = Field(..., description='Secret description')
-    key_id: uuid.UUID = Field(..., description='Secret key')
-    encrypted_value: str = Field(..., description='Encrypted secret value')
-    version: int = Field(..., description='Secret version')
-    created_at: datetime = Field(..., description='Secret creation time')
-    updated_at: datetime = Field(..., description='Secret modification time')
+class SecretDAO(Base):
+    __tablename__ = 'secrets'
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(256), nullable=False)
+    description = Column(String, nullable=False)
+    key_id = Column(UUID(as_uuid=True), nullable=False)
+    encrypted_value = Column(String, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, nullable=False, default=datetime.timezone.utc)
+    updated_at = Column(DateTime, nullable=False, default=datetime.timezone.utc, onupdate=datetime.timezone.utc)

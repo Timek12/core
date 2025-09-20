@@ -1,6 +1,6 @@
 import os
-from sqlalchemy import create_engine, Integer, String, Float, Column
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -29,13 +29,12 @@ def get_engine():
     
     return create_engine(database_url, **engine_config)
 
-def get_session():
-    """Get database session."""
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    return SessionLocal()
-
-# Create database engine with connection string built from environment variables
+# Create database engine
 engine = get_engine()
 
-# Create declarative base for ORM models
-Base = declarative_base()
+# Create session factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def get_session() -> Session:
+    """Get database session."""
+    return SessionLocal()

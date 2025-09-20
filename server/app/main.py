@@ -1,121 +1,85 @@
 from typing import List
-from fastapi import FastAPI, HTTPException
-import uuid6
+from fastapi import FastAPI, HTTPException, Depends
+from sqlalchemy.orm import Session
 import uuid
-from datetime import datetime, timedelta
-from core.server.app.models.dto.secret import Secret, SecretCreate, SecretUpdate
+from datetime import datetime
 
-api = FastAPI()
+from .models.dto.secret import Secret, SecretCreate, SecretUpdate
+from .services.secret_service import SecretService
+from .dependencies import get_db
+from .database import engine
+from .models.dao.secret import Base
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+api = FastAPI(title="LunaGuard Secrets API", version="1.0.0")
 
 @api.get('/health')
 def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
-now = datetime.now()
-
-all_secrets: List[Secret] = [
-    Secret(
-        id=uuid6.uuid7(),
-        name="db-password",
-        description="Database connection password",
-        key_id=uuid6.uuid7(),
-        encrypted_value="gAAAAABlYXNkZmFrZQ==",
-        version=1,
-        created_at=now - timedelta(days=10),
-        updated_at=now - timedelta(days=5),
-    ),
-    Secret(
-        id=uuid6.uuid7(),
-        name="api-token",
-        description="Token for external API integration",
-        key_id=uuid6.uuid7(),
-        encrypted_value="bXlzdXBlcnNlY3JldA==",
-        version=2,
-        created_at=now - timedelta(days=20),
-        updated_at=now - timedelta(days=2),
-    ),
-    Secret(
-        id=uuid6.uuid7(),
-        name="jwt-signing-key",
-        description="Private key for JWT signing",
-        key_id=uuid6.uuid7(),
-        encrypted_value="U29tZUVuY3J5cHRlZEtleQ==",
-        version=3,
-        created_at=now - timedelta(days=30),
-        updated_at=now - timedelta(days=1),
-    ),
-    Secret(
-        id=uuid6.uuid7(),
-        name="smtp-password",
-        description="Password for SMTP email service",
-        key_id=uuid6.uuid7(),
-        encrypted_value="U01UUC1QYXNzZWQ=",
-        version=1,
-        created_at=now - timedelta(days=15),
-        updated_at=now - timedelta(days=7),
-    ),
-    Secret(
-        id=uuid6.uuid7(),
-        name="payment-gateway-key",
-        description="Secret key for payment gateway",
-        key_id=uuid6.uuid7(),
-        encrypted_value="UGF5bWVudC1HZXR3YXktU2VjcmV0",
-        version=4,
-        created_at=now - timedelta(days=60),
-        updated_at=now - timedelta(hours=12),
-    ),
-]
-
 @api.get('/secrets', response_model=List[Secret])
-def get_secrets():
-    return all_secrets
+def get_secrets(db: Session = Depends(get_db)):
+    """Get all secrets."""
+    service = SecretService(db)
+    return service.get_all_secrets()
+
+@api.get('/secrets/{secret_id}', response_model=Secret)
+def get_secret(secret_id: str, db: Session = Depends(get_db)):
+    """Get a secret by ID."""
+    try:
+        secret_uuid = uuid.UUID(secret_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+    
+    service = SecretService(db)
+    secret = service.get_secret_by_id(secret_uuid)
+    
+    if not secret:
+        raise HTTPException(status_code=404, detail="Secret not found")
+    
+    return secret
 
 @api.post('/secrets', response_model=Secret)
-def create_secret(secret: SecretCreate):
-    new_secret = Secret(
-        id=uuid6.uuid7(),
-        name=secret.name,
-        description=secret.description,
-        key_id=uuid6.uuid7(),
-        encrypted_value=secret.encrypted_value,
-        version=secret.version,
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
-    )
-
-    all_secrets.append(new_secret)
-
-    return new_secret
+def create_secret(secret: SecretCreate, db: Session = Depends(get_db)):
+    """Create a new secret."""
+    service = SecretService(db)
+    created_secret = service.create_secret(secret)
+    
+    if not created_secret:
+        raise HTTPException(status_code=500, detail="Failed to create secret")
+    
+    return created_secret
 
 @api.put('/secrets/{secret_id}', response_model=Secret)
-def update_secret(secret_id: uuid.UUID, updated_secret: SecretUpdate):
-    for secret in all_secrets:
-        if secret.id == secret_id:
-            if updated_secret.name is not None:
-                secret.name = updated_secret.name
-            if updated_secret.description is not None:
-                secret.description = updated_secret.description
-            if updated_secret.encrypted_value is not None:
-                secret.encrypted_value = updated_secret.encrypted_value
-            if updated_secret.version is not None:
-                secret.version = updated_secret.version
-            if updated_secret.updated_at is not None:
-                secret.updated_at = updated_secret.updated_at
-  
-            return secret
-
-    raise HTTPException(status_code=404, detail='Secret not found')    
-
+def update_secret(secret_id: str, updated_secret: SecretUpdate, db: Session = Depends(get_db)):
+    """Update an existing secret."""
+    try:
+        secret_uuid = uuid.UUID(secret_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+    
+    service = SecretService(db)
+    secret = service.update_secret(secret_uuid, updated_secret)
+    
+    if not secret:
+        raise HTTPException(status_code=404, detail="Secret not found")
+    
+    return secret
 
 @api.delete('/secrets/{secret_id}', response_model=Secret)
-def delete_secret(secret_id: uuid.UUID):
-    for index, secret in enumerate(all_secrets):
-        if secret.id == secret_id:
-            all_secrets.pop(index)
-
-            return secret
+def delete_secret(secret_id: str, db: Session = Depends(get_db)):
+    """Delete a secret by ID."""
+    try:
+        secret_uuid = uuid.UUID(secret_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
     
-    raise HTTPException(status_code=404, detail='Secret not found')    
-
-
-# TODO: Make a functionality to initialize backend storage - encrypted root key, master key and DEK 
+    service = SecretService(db)
+    secret = service.delete_secret(secret_uuid)
+    
+    if not secret:
+        raise HTTPException(status_code=404, detail="Secret not found")
+    
+    return secret 
