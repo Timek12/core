@@ -2,10 +2,10 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
-from ..models.dao.secret import SecretDAO
-from ..models.dto.secret import Secret, SecretCreate, SecretUpdate
+from models.dao.secret import SecretDAO
+from models.dto.secret import Secret, SecretCreate, SecretUpdate
 
 
 class SecretService:
@@ -35,7 +35,7 @@ class SecretService:
                 name=secret_create.name,
                 description=secret_create.description,
                 key_id=secret_create.key_id,
-                encrypted_value=secret_create.encrypted_value,
+                encrypted_value=secret_create.value_plaintext,
                 version=secret_create.version,
                 created_at=secret_create.created_at,
                 updated_at=secret_create.updated_at
@@ -64,12 +64,12 @@ class SecretService:
                 dao_secret.description = secret_update.description
             if secret_update.key_id is not None:
                 dao_secret.key_id = secret_update.key_id
-            if secret_update.encrypted_value is not None:
-                dao_secret.encrypted_value = secret_update.encrypted_value
+            if secret_update.value_plaintext is not None:
+                dao_secret.encrypted_value = secret_update.value_plaintext
             if secret_update.version is not None:
                 dao_secret.version = secret_update.version
             
-            dao_secret.updated_at = datetime.utcnow()
+            dao_secret.updated_at = datetime.now(timezone.utc)
             
             self.db.commit()
             self.db.refresh(dao_secret)
@@ -102,7 +102,7 @@ class SecretService:
             name=dao_secret.name,
             description=dao_secret.description,
             key_id=dao_secret.key_id,
-            encrypted_value=dao_secret.encrypted_value,
+            value_plaintext=dao_secret.encrypted_value,
             version=dao_secret.version,
             created_at=dao_secret.created_at,
             updated_at=dao_secret.updated_at

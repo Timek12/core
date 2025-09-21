@@ -4,11 +4,11 @@ from sqlalchemy.orm import Session
 import uuid
 from datetime import datetime
 
-from .models.dto.secret import Secret, SecretCreate, SecretUpdate
-from .services.secret_service import SecretService
-from .dependencies import get_db
-from .database import engine
-from .models.dao.secret import Base
+from models.dto.secret import Secret, SecretCreate, SecretUpdate
+from services.secret_service import SecretService
+from dependencies import get_db
+from database import engine
+from models.dao.secret import Base
 
 # Create tables
 Base.metadata.create_all(bind=engine)

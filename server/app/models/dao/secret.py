@@ -1,7 +1,7 @@
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import Column, String, Integer, DateTime, UUID
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 Base = declarative_base()
 
@@ -14,5 +14,5 @@ class SecretDAO(Base):
     key_id = Column(UUID(as_uuid=True), nullable=False)
     encrypted_value = Column(String, nullable=False)
     version = Column(Integer, nullable=False, default=1)
-    created_at = Column(DateTime, nullable=False, default=datetime.timezone.utc)
-    updated_at = Column(DateTime, nullable=False, default=datetime.timezone.utc, onupdate=datetime.timezone.utc)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
