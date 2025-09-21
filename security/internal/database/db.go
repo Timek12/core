@@ -118,7 +118,7 @@ func waitForDatabaseSchema(pool *pgxpool.Pool) error {
 	maxRetries := 30 // Wait up to 60 seconds (30 * 2s)
 	retryDelay := time.Second * 2
 	
-	requiredTables := []string{"users", "oauth_tokens", "jwt_refresh_tokens"}
+	requiredTables := []string{"users", "oauth_refresh_tokens", "jwt_refresh_tokens"}
 	
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		allTablesExist := true
