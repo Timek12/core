@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
     user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     provider VARCHAR(50) NOT NULL,
     refresh_token TEXT NOT NULL,
-    expires_at TIMESTAMP WITH TIME ZONE,
+    token_expires_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
     -- Indexes
@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS jwt_refresh_tokens (
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     revoked BOOLEAN DEFAULT FALSE,
     device_info JSONB, -- User agent, IP, etc.
-    client_ip INET,
+    ip_address INET,
+    revoked_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
     -- Indexes
@@ -98,7 +99,7 @@ RETURNS void AS $$
 BEGIN
     -- Clean up expired OAuth refresh tokens
     DELETE FROM oauth_refresh_tokens 
-    WHERE expires_at IS NOT NULL AND expires_at < NOW();
+    WHERE token_expires_at IS NOT NULL AND token_expires_at < NOW();
     
     -- Clean up expired JWT refresh tokens
     DELETE FROM jwt_refresh_tokens 

@@ -341,7 +341,7 @@ func (db *DB) GetUserByID(ctx context.Context, userID int) (*User, error) {
 // StoreRefreshToken stores or updates refresh token for user
 func (db *DB) StoreRefreshToken(ctx context.Context, userID int, refreshToken string, expiresAt time.Time) error {
 	query := `
-		INSERT INTO oauth_tokens (user_id, provider, refresh_token, token_expires_at)
+		INSERT INTO oauth_refresh_tokens (user_id, provider, refresh_token, token_expires_at)
 		VALUES ($1, 'google', $2, $3)
 		ON CONFLICT (user_id, provider) DO UPDATE SET
 			refresh_token = EXCLUDED.refresh_token,
@@ -360,7 +360,7 @@ func (db *DB) StoreRefreshToken(ctx context.Context, userID int, refreshToken st
 func (db *DB) GetRefreshToken(ctx context.Context, userID int) (string, error) {
 	var refreshToken string
 
-	query := `SELECT refresh_token FROM oauth_tokens WHERE user_id = $1`
+	query := `SELECT refresh_token FROM oauth_refresh_tokens WHERE user_id = $1`
 
 	err := db.Pool.QueryRow(ctx, query, userID).Scan(&refreshToken)
 	if err == sql.ErrNoRows {
@@ -375,7 +375,7 @@ func (db *DB) GetRefreshToken(ctx context.Context, userID int) (string, error) {
 
 // DeleteRefreshToken removes refresh token (on logout)
 func (db *DB) DeleteRefreshToken(ctx context.Context, userID int) error {
-	query := `DELETE FROM oauth_tokens WHERE user_id = $1`
+	query := `DELETE FROM oauth_refresh_tokens WHERE user_id = $1`
 
 	_, err := db.Pool.Exec(ctx, query, userID)
 	if err != nil {
