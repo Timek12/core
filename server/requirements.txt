@@ -1,7 +1,6 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-uuid6==2023.5.2
-sqlalchemy>=2.0.0
-psycopg2-binary>=2.9.0
-python-dotenv>=1.0.0
+fastapi==0.117.1
+uvicorn==0.37.0
+pydantic==2.11.9
+python-dotenv>=1.1.1
+cryptography>=46.0.1
+requests>=2.31.0

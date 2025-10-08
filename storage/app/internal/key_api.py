@@ -1,0 +1,58 @@
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session
+
+from app.db.db import get_db
+from app.services.key_service import KeyService
+from app.dto.key import KeyCreate, KeyResponse
+
+router = APIRouter(prefix="/internal/keys", tags=["keys"])
+
+@router.get("/{key_id}", response_model=KeyResponse)
+def get_key_by_id(key_id: int, db: Session = Depends(get_db)):
+    service = KeyService(db)
+    key = service.get_key_by_id(key_id)
+
+    if not key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Key not found"
+        )
+    
+    return key
+
+@router.get("/type/{key_type}", response_model=KeyResponse)
+def get_key_by_type(key_type: str, db: Session = Depends(get_db)):
+    service = KeyService(db)
+    key = service.get_key_by_type(key_type)
+
+    if not key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Key not found"
+        )
+    
+    return key
+
+@router.get("", response_model=List[KeyResponse])
+def get_all_active_keys(key_type: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    service = KeyService(db)
+    return service.get_all_active_keys(key_type)
+
+@router.post("", response_model=KeyResponse, status_code=status.HTTP_201_CREATED)
+def create_key(key_data: KeyCreate, db: Session = Depends(get_db)):
+    service = KeyService(db)
+    return service.create_key(key_data)
+
+@router.patch("/{key_id}/deactivate", response_model=KeyResponse)
+def deactivate_key(key_id: int, db: Session = Depends(get_db)):
+    service = KeyService(db)
+    key = service.deactivate_key(key_id)
+
+    if not key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Key not found"
+        )
+    
+    return key
