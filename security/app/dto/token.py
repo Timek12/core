@@ -1,7 +1,9 @@
+from dataclasses import dataclass
+from enum import Enum
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, TypedDict
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # OAuth Token DTOs
@@ -82,7 +84,33 @@ class JWTTokenPublic(BaseModel):
     class Config:
         from_attributes = True
 
-
+@dataclass
+class TokenType(str, Enum):
+    ACCESS = "access"
+    REFRESH = "refresh"
+    
+@dataclass    
+class TokenPayload(TypedDict):
+    user_id: str
+    email: str
+    roles: list[str]
+    token_type: TokenType
+    exp: Optional[int] = None
+    iat: Optional[int] = None
+    
+    @property
+    def is_expired(self) -> bool:
+        if self.exp is None:
+            return False
+        return datetime.fromtimestamp(self.exp, tz=timezone.utc) < datetime.now(timezone.utc)
+    
+@dataclass
+class UserInfo:
+    """Represents authenticated user"""    
+    user_id: str
+    email: str
+    roles: list[str]
+    
 # Authentication Response DTOs
 class TokenPair(BaseModel):
     """Schema for access and refresh token pair."""
@@ -90,7 +118,6 @@ class TokenPair(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int  # seconds until access token expires
-
 
 class LoginResponse(BaseModel):
     """Schema for login response."""
@@ -106,15 +133,25 @@ class RefreshTokenRequest(BaseModel):
 class RefreshTokenResponse(BaseModel):
     """Schema for refresh token response."""
     access_token: str
-    token_type: str = "bearer"
+    token_type: TokenType = "bearer"
     expires_in: int
-
 
 class RevokeTokenRequest(BaseModel):
     """Schema for token revocation request."""
     token: str  # Can be access or refresh token
-    token_type_hint: Optional[str] = None  # "access_token" or "refresh_token"
+    token_type_hint: Optional[TokenType] = None
 
+class TokenVerificationError(Exception):
+    """Base exception for token verification errors"""
+    pass
+
+class ExpiredTokenError(TokenVerificationError):
+    """Token has expired"""
+    pass
+
+class InvalidTokenError(TokenVerificationError):
+    """Token is invalid (tampered, wrong signature, etc.)"""
+    pass
 
 # Import for forward reference
 from app.dto.user import UserPublic

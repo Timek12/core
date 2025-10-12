@@ -10,7 +10,7 @@ import os
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from app.api import crypto_api
+from app.api import crypto_api, secrets_api
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -22,6 +22,7 @@ app = FastAPI(title="Key Management System API")
 
 # Include routers
 app.include_router(crypto_api.router)
+app.include_router(secrets_api.router)
 
 @app.get('/health')
 def health_check():

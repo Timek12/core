@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app
 
-RUN mkdir -p /app/api /app/services /app/repositories /app/dto
+RUN mkdir -p /app/internal /app/services /app/repositories /app/dto
 
 EXPOSE 8002
 

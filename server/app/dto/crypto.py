@@ -3,7 +3,7 @@ from typing import Optional
 
 class InitRequest(BaseModel):
     external_token: str
-    master_key_name: Optional[str] = "master-v1"
+    root_key_name: Optional[str] = "root"
 
 class UnsealRequest(BaseModel):
     external_token: str

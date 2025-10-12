@@ -12,7 +12,7 @@ from app.repositories.user_repository import UserRepository
 from app.repositories.jwt_repository import JWTTokenRepository
 from app.db.schema import Users, JWTRefreshTokens
 from app.dto.user import UserCreate, UserResponse
-from app.dto.token import TokenPair
+from app.dto.token import InvalidTokenError, TokenPair, TokenPayload, TokenType
 
 class AuthService:
     """Service for authentication and token management."""
@@ -140,19 +140,24 @@ class AuthService:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
 
             # Check token type
-            if payload.get("type") != "access":
-                return None
+            if payload.get("type") != TokenType.ACCESS:
+                raise InvalidTokenError("Token is not an access token")
             
-            # Check expiration
-            exp = payload.get("exp")
-            if exp and datetime.fromtimestamp(exp, tz=timezone.utc) < datetime.now(timezone.utc):
-                return None
+            user_id = payload.get("sub")
+            if not user_id:
+                raise InvalidTokenError("Token missing subject (user_id)")
+
+            return TokenPayload(
+                user_id=user_id,
+                token_type=TokenType.ACCESS
+            )
             
-            return payload
         except jwt.ExpiredSignatureError:
             return None
-        except jwt.InvalidTokenError:
-            return None
+        except jwt.InvalidTokenError as e:
+            raise InvalidTokenError(f"Invalid token: {str(e)}") from e
+        except Exception as e:
+            raise InvalidTokenError(f"Token verification failed: {str(e)}") from e
         
     def verify_refresh_token(self, token: str) -> Optional[JWTRefreshTokens]:
         try:
