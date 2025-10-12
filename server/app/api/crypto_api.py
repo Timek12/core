@@ -1,6 +1,7 @@
 from base64 import b64encode
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.services.crypto_service import CryptoService
+from app.utils.jwt_utils import get_current_user, require_role, require_roles, UserInfo
 from dotenv import load_dotenv
 import os
 import requests
@@ -21,8 +22,8 @@ _runtime = {
 router = APIRouter(prefix="/api/crypto", tags=["crypto"])
 
 @router.post("/init", response_model=StatusResponse)
-def init(req: InitRequest):
-    """Initialize the server with root and master keys."""
+def init(req: InitRequest, current_user: UserInfo = Depends(require_role("admin"))):
+    """Initialize the server with root and master keys. Requires admin role."""
 
     # Check if already initialized
     response = requests.get(f"{STORAGE_SERVICE_URL}/api/keys/type/root")
@@ -89,8 +90,8 @@ def init(req: InitRequest):
     )
 
 @router.post("/unseal", response_model=StatusResponse)
-def unseal(req: UnsealRequest):
-    """Unseal the server by decrypting root and master key."""
+def unseal(req: UnsealRequest, current_user: UserInfo = Depends(require_role("admin"))):
+    """Unseal the server by decrypting root and master key. Requires admin role."""
     root_response = requests.get(f"{STORAGE_SERVICE_URL}/api/keys/type/root")
     if root_response.status_code == 404:
         raise HTTPException(status_code=400, detail="Not initialized")
@@ -141,8 +142,8 @@ def unseal(req: UnsealRequest):
     return StatusResponse(sealed=False, message="Unsealed successfully")
 
 @router.post("/seal", response_model=StatusResponse)
-def seal():
-    """Seal the server by wiping keys from memory."""
+def seal(current_user: UserInfo = Depends(require_role("admin"))):
+    """Seal the server by wiping keys from memory. Requires admin role."""
     _runtime["root_key"] = None
     _runtime["master_key"] = None
     _runtime["sealed"] = True
@@ -155,8 +156,8 @@ def seal():
     return StatusResponse(sealed=True, message="Sealed successfully")
 
 @router.get("/status", response_model=StatusResponse)
-def status():
-    """Get server seal status."""
+def status(current_user: UserInfo = Depends(get_current_user)):
+    """Get server seal status. Requires authentication."""
     response = requests.get(f"{STORAGE_SERVICE_URL}/api/status")
     if response.status_code == 404:
         raise HTTPException(status_code=500, detail="Status not found")
@@ -165,8 +166,8 @@ def status():
     return StatusResponse(sealed=status_data['sealed'])
 
 @router.post("/issue-dek", response_model=IssueDEKResponse)
-def issue_dek():
-    """Issue a new Data Encryption Key (DEK)."""
+def issue_dek(current_user: UserInfo = Depends(require_roles(["admin", "crypto"]))):
+    """Issue a new Data Encryption Key (DEK). Requires admin or crypto role."""
     if _runtime["sealed"]:
         raise HTTPException(status_code=400, detail="Server is sealed")
     
@@ -201,8 +202,8 @@ def issue_dek():
     )
 
 @router.post("/encrypt", response_model=EncryptResponse)
-def encrypt_secret(req: EncryptRequest):
-    """Encrypt data with a new empheral DEK."""
+def encrypt_secret(req: EncryptRequest, current_user: UserInfo = Depends(require_roles(["admin", "crypto"]))):
+    """Encrypt data with a new ephemeral DEK. Requires admin or crypto role."""
     if _runtime['sealed']:
         raise HTTPException(status_code=400, detail="Server is sealed")
 
@@ -244,8 +245,8 @@ def encrypt_secret(req: EncryptRequest):
     )
 
 @router.post("/decrypt", response_model=StatusResponse)
-def decrypt_secret(req: DecryptRequest):
-    """Decrypt data using stored DEK."""
+def decrypt_secret(req: DecryptRequest, current_user: UserInfo = Depends(require_roles(["admin", "crypto"]))):
+    """Decrypt data using stored DEK. Requires admin or crypto role."""
     if _runtime["sealed"]:
         raise HTTPException(status_code=400, detail="Server is sealed")
 

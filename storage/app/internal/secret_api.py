@@ -169,7 +169,7 @@ def update_secret(
     return secret
 
 @router.delete("/{secret_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_secret(secret_id: uuid.UUID, db: Session = Depends(get_db),     current_user: dict = Depends(get_current_user)):
+def delete_secret(secret_id: uuid.UUID, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     service = SecretService(db)
     deleted = service.delete_secret(secret_id)
 
