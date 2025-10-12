@@ -1,19 +1,29 @@
 from dataclasses import dataclass
 from enum import Enum
-from pydantic import BaseModel, Field
-from typing import Optional, TypedDict
-import uuid
+from typing import Optional
 from datetime import datetime, timezone
 
 from fastapi import status
 
+class TokenVerificationError(Exception):
+    """Base exception for token verification errors"""
+    pass
+
+class ExpiredTokenError(TokenVerificationError):
+    """Token has expired"""
+    pass
+
+class InvalidTokenError(TokenVerificationError):
+    """Token is invalid (tampered, wrong signature, etc.)"""
+    pass
+
 class TokenType(str, Enum):
     ACCESS = "access"
     REFRESH = "refresh"
-    
+  
 class TokenAlgorithm(str, Enum):
     HS256 = "HS256"
-    
+       
 class UserRole(str, Enum):
     ADMIN = "admin"
     USER = "user"

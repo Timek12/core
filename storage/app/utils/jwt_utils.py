@@ -4,12 +4,11 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Callable
 import os
 
-from core.server.app.dto.token import ExpiredTokenError, InvalidTokenError, TokenError, TokenPayload, TokenType, UserInfo, UserRole
-from core.storage.app.dto.token import TokenAlgorithm
-
+from app.dto.token import ExpiredTokenError, InvalidTokenError, TokenAlgorithm, TokenError, TokenPayload, TokenType, UserInfo, UserRole
+        
 class JWTValidator:
     """Handles JWT validation"""
-    def __init__(self, secret_key: Optional[str] = None, algorithm: str = TokenAlgorithm.HS256):
+    def __init__(self, secret_key: Optional[str] = None, algorithm: str = TokenAlgorithm.HS256): # TODO: make algorithms as enums
         self.secret_key = secret_key or os.getenv("JWT_SECRET_KEY")
         self.algorithm = algorithm
         

@@ -148,7 +148,7 @@ def login_json(
 
 @router.post("/refresh", response_model=RefreshTokenResponse)
 def refresh_token(refresh_request: RefreshTokenRequest, db: Session = Depends(get_db)):
-    """Refresh access token using refresh token."""
+    """Refresh access token using refresh token (returns only access token)."""
 
     auth_service = AuthService(db)
 
@@ -165,6 +165,30 @@ def refresh_token(refresh_request: RefreshTokenRequest, db: Session = Depends(ge
         token_type="bearer",
         expires_in=auth_service.access_token_expire_minutes * 60
     )
+
+@router.post("/refresh-pair", response_model=TokenPair)
+def refresh_token_pair(refresh_request: RefreshTokenRequest, request: Request, db: Session = Depends(get_db)):
+    """Refresh both access and refresh tokens."""
+
+    auth_service = AuthService(db)
+    
+    # Extract device info
+    device_info = request.headers.get("User-Agent", "Unknown")
+    ip_address = request.client.host
+
+    token_pair = auth_service.refresh_token_pair(
+        refresh_request.refresh_token, 
+        device_info=device_info,
+        ip_address=ip_address
+    )
+    
+    if not token_pair:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token"
+        )
+
+    return token_pair
 
 # Protected endpoints
 

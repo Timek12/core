@@ -5,11 +5,17 @@ from sqlalchemy.orm import Session
 from app.db.db import get_db
 from app.services.key_service import KeyService
 from app.dto.key import KeyCreate, KeyResponse
+from app.utils.jwt_utils import get_current_user, UserInfo, require_role
 
 router = APIRouter(prefix="/internal/keys", tags=["keys"])
 
 @router.get("/{key_id}", response_model=KeyResponse)
-def get_key_by_id(key_id: int, db: Session = Depends(get_db)):
+def get_key_by_id(
+    key_id: int, 
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user)
+):
+    """Get key by ID - requires authentication"""
     service = KeyService(db)
     key = service.get_key_by_id(key_id)
 
@@ -22,7 +28,12 @@ def get_key_by_id(key_id: int, db: Session = Depends(get_db)):
     return key
 
 @router.get("/type/{key_type}", response_model=KeyResponse)
-def get_key_by_type(key_type: str, db: Session = Depends(get_db)):
+def get_key_by_type(
+    key_type: str, 
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user)
+):
+    """Get key by type - requires authentication"""
     service = KeyService(db)
     key = service.get_key_by_type(key_type)
 
@@ -35,17 +46,32 @@ def get_key_by_type(key_type: str, db: Session = Depends(get_db)):
     return key
 
 @router.get("", response_model=List[KeyResponse])
-def get_all_active_keys(key_type: Optional[str] = Query(None), db: Session = Depends(get_db)):
+def get_all_active_keys(
+    key_type: Optional[str] = Query(None), 
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user)
+):
+    """Get all active keys - requires authentication"""
     service = KeyService(db)
     return service.get_all_active_keys(key_type)
 
 @router.post("", response_model=KeyResponse, status_code=status.HTTP_201_CREATED)
-def create_key(key_data: KeyCreate, db: Session = Depends(get_db)):
+def create_key(
+    key_data: KeyCreate, 
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(require_role("admin"))
+):
+    """Create key - requires admin role"""
     service = KeyService(db)
     return service.create_key(key_data)
 
 @router.patch("/{key_id}/deactivate", response_model=KeyResponse)
-def deactivate_key(key_id: int, db: Session = Depends(get_db)):
+def deactivate_key(
+    key_id: int, 
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(require_role("admin"))
+):
+    """Deactivate key - requires admin role"""
     service = KeyService(db)
     key = service.deactivate_key(key_id)
 

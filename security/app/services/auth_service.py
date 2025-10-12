@@ -69,13 +69,14 @@ class AuthService:
         return UserResponse.from_orm(saved_user)
     
     # Token operations
-    def create_access_token(self, user_id: int, email: str) -> Tuple[str, datetime]:
+    def create_access_token(self, user_id: int, email: str, roles: list[str] = None) -> Tuple[str, datetime]:
         expires_delta = timedelta(minutes=self.access_token_expire_minutes)
         expire = datetime.now(timezone.utc) + expires_delta
 
         to_encode = {
             "sub": str(user_id),
             "email": email,
+            "roles": roles or ["user"],  # Default role
             "exp": expire,
             "iat": datetime.now(timezone.utc),
             "type": "access"
@@ -125,7 +126,12 @@ class AuthService:
     
     def create_token_pair(self, user: Users, device_info: Optional[str] = None,
                         ip_address: Optional[str] = None) -> TokenPair:
-        access_token, _ = self.create_access_token(user.user_id, user.email)
+        # Get user roles (assuming user has roles attribute or default to ["user"])
+        user_roles = getattr(user, 'roles', ["user"])
+        if isinstance(user_roles, str):
+            user_roles = [user_roles]
+        
+        access_token, _ = self.create_access_token(user.user_id, user.email, user_roles)
         refresh_token, _ = self.create_refresh_token(user.user_id, device_info, ip_address)
 
         return TokenPair(
@@ -210,10 +216,31 @@ class AuthService:
         if not user:
             return None
         
-        # Create new access token
-        # TODO: Add creating new token pair
-        access_token, _ = self.create_access_token(user.user_id, user.email)
+        # Get user roles
+        user_roles = getattr(user, 'roles', ["user"])
+        if isinstance(user_roles, str):
+            user_roles = [user_roles]
+        
+        # Create new access token only (old behavior)
+        access_token, _ = self.create_access_token(user.user_id, user.email, user_roles)
         return access_token
+    
+    def refresh_token_pair(self, refresh_token: str, device_info: Optional[str] = None, ip_address: Optional[str] = None) -> Optional[TokenPair]:
+        """Create new token pair and revoke old refresh token"""
+        db_token = self.verify_refresh_token(refresh_token)
+        if not db_token:
+            return None
+        
+        # Get user
+        user = self.user_repo.find_by_id(db_token.user_id)
+        if not user:
+            return None
+        
+        # Revoke old refresh token
+        self.jwt_repo.revoke_token(db_token.jti)
+        
+        # Create new token pair
+        return self.create_token_pair(user, device_info, ip_address)
     
     def revoke_token(self, token: str) -> bool:
         db_token = self.verify_refresh_token(token)

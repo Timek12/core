@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from pydantic import BaseModel, Field
-from typing import Optional, TypedDict
-import uuid
+from typing import Optional
 from datetime import datetime, timezone
 
 from fastapi import status
