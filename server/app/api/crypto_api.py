@@ -1,34 +1,30 @@
-from base64 import b64encode
+from base64 import b64encode, b64decode
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
 from app.services.crypto_service import CryptoService
+from app.clients.storage_client import StorageClient
 from app.utils.jwt_utils import get_current_user, require_role, require_roles, UserInfo
+from app.utils.redis_state import get_state_manager
 from dotenv import load_dotenv
 import os
-import requests
+import hashlib
 import json
 from app.dto.crypto import *
 
 load_dotenv()
 
-# Configuration
-STORAGE_SERVICE_URL = os.getenv('STORAGE_SERVICE_URL', 'http://localhost:8002')
-
-_runtime = {
-    "sealed": True,
-    "root_key": None,  
-    "master_key": None,
-}  
-
 router = APIRouter(prefix="/api/crypto", tags=["crypto"])
 
 @router.post("/init", response_model=StatusResponse)
-def init(req: InitRequest, current_user: UserInfo = Depends(require_role("admin"))):
-    """Initialize the server with root and master keys. Requires admin role."""
-
+async def init(req: InitRequest, current_user: UserInfo = Depends(require_role("admin"))):
+    """Initialize the vault with Redis state management"""
+    
+    state_manager = await get_state_manager()
+    storage_client = StorageClient()
+    
     # Check if already initialized
-    response = requests.get(f"{STORAGE_SERVICE_URL}/api/keys/type/root")
-    if response.status_code == 200:
-        raise HTTPException(status_code=400, detail="Already initialized")
+    if await state_manager.is_vault_initialized():
+        raise HTTPException(status_code=400, detail="Vault already initialized")
 
     # Initialize crypto service
     service = CryptoService()
@@ -36,248 +32,339 @@ def init(req: InitRequest, current_user: UserInfo = Depends(require_role("admin"
     # Generate keys
     root_key = os.urandom(32)
     master_key = os.urandom(32)
-
+    
     # Derive KEK from external token
     salt = os.urandom(16)
     kek = service.hkdf_derive(req.external_token.encode("utf-8"), salt)
 
     # Encrypt root key with KEK
     root_nonce, root_ct = service.aesgcm_encrypt(kek, root_key)
-
-    # Encrypt master key with root key
     master_nonce, master_ct = service.aesgcm_encrypt(root_key, master_key)
 
-    # Store root key
-    root_response = requests.post(
-        f"{STORAGE_SERVICE_URL}/api/keys",
-        json={
-            'key_type': 'root',
-            'encrypted_key': root_ct.hex(),
-            'nonce': root_nonce.hex(),
-            'version': 1,
-            'active': True,
-            'meta': json.dumps({"salt": salt.hex()})
-        }
-    )
-    root_response.raise_for_status()
-    root_id = root_response.json()['id']
+    # Store keys in storage service
+    root_key_data = {
+        'key_type': 'root',
+        'encrypted_key': root_ct.hex(),
+        'nonce': root_nonce.hex(),
+        'version': 1,
+        'status': 'active',
+        'meta': json.dumps({"salt": salt.hex(), "kek_derived": True})
+    }
+    
+    master_key_data = {
+        'key_type': 'master', 
+        'encrypted_key': master_ct.hex(),
+        'nonce': master_nonce.hex(),
+        'version': 1,
+        'status': 'active',
+        'meta': json.dumps({"derived_from": "root"})
+    }
 
-    # Store master key
-    master_response = requests.post(
-        f"{STORAGE_SERVICE_URL}/api/keys",
-        json={
-            'key_type': 'master',
-            'encrypted_key': master_ct.hex(),
-            'nonce': master_nonce.hex(),
-            'version': 1,
-            'active': True,
-            'meta': json.dumps({"salt": salt.hex()})
-        }
-    )
-    master_response.raise_for_status()
-    master_id = master_response.json()['id']
+    root_response = await storage_client.create_key(root_key_data)
+    master_response = await storage_client.create_key(master_key_data)
 
-    requests.put(
-        f"{STORAGE_SERVICE_URL}/api/status",
-        json={'sealed': True}
-    )
+    # Store root key metadata in Redis
+    await state_manager.store_root_key_info({
+        "storage_id": root_response['id'],
+        "salt": salt.hex(),
+        "created_by": current_user.user_id,
+        "created_at": datetime.utcnow().isoformat()
+    })
 
-    _runtime["sealed"] = True
+    # Mark vault as initialized and sealed
+    await state_manager.set_vault_initialized(current_user.user_id)
+    await state_manager.set_vault_sealed(True, current_user.user_id)
+
+    # Clear sensitive data from memory
+    del root_key, master_key, kek
 
     return StatusResponse(
-        sealed=True,
-        message=f"Initialized: root_id={root_id} master_id={master_id}"
+        vault=VaultStatus(
+            sealed=True, 
+            initialized=True,
+            version="1.0"
+        ),
+        message=f"Vault initialized successfully. Root ID: {root_response['id']}, Master ID: {master_response['id']}"
     )
 
+
 @router.post("/unseal", response_model=StatusResponse)
-def unseal(req: UnsealRequest, current_user: UserInfo = Depends(require_role("admin"))):
-    """Unseal the server by decrypting root and master key. Requires admin role."""
-    root_response = requests.get(f"{STORAGE_SERVICE_URL}/api/keys/type/root")
-    if root_response.status_code == 404:
-        raise HTTPException(status_code=400, detail="Not initialized")
+async def unseal(req: UnsealRequest, current_user: UserInfo = Depends(require_role("admin"))):
+    """Unseal the vault using Redis for session management"""
+    
+    state_manager = await get_state_manager()
+    storage_client = StorageClient()
+    
+    # Check if initialized
+    if not await state_manager.is_vault_initialized():
+        raise HTTPException(status_code=400, detail="Vault not initialized")
+
+    # Get root key info from Redis
+    root_key_info = await state_manager.get_root_key_info()
+    if not root_key_info:
+        raise HTTPException(status_code=500, detail="Root key metadata not found")
+
+    # Fetch encrypted root key from storage
+    root_key_data = await storage_client.get_key(root_key_info["storage_id"])
+    
+    # Find and fetch master key
+    master_keys = await storage_client.list_keys(filters={"key_type": "master", "status": "active"})
+    if not master_keys:
+        raise HTTPException(status_code=500, detail="Master key not found")
+    master_key_data = master_keys[0]
 
     # Initialize crypto service
     service = CryptoService()
 
-    root_data = root_response.json()
-
-    master_response = requests.get(f"{STORAGE_SERVICE_URL}/api/keys/type/master")
-    if master_response.status_code == 404:
-        raise HTTPException(status_code=400, detail="Not initialized")
-
-    master_data = master_response.json()
-
-    root_meta = json.loads(root_data.get("meta", "{}"))
-    salt = bytes.fromhex(root_meta.get("salt", ""))
-
-    root_ct = bytes.fromhex(root_data["encrypted_key"])
-    root_nonce = bytes.fromhex(root_data["nonce"])
-
-
-
+    # Decrypt root key using external token
+    salt = bytes.fromhex(root_key_info["salt"])
     kek = service.hkdf_derive(req.external_token.encode("utf-8"), salt)
+    
+    root_ct = bytes.fromhex(root_key_data["encrypted_key"])
+    root_nonce = bytes.fromhex(root_key_data["nonce"])
 
     try:
         root_key = service.aesgcm_decrypt(kek, root_nonce, root_ct)
     except Exception:
-        raise HTTPException(status_code=403, detail="Invalid token")
-    
-    master_ct = bytes.fromhex(master_data["encrypted_key"])
-    master_nonce = bytes.fromhex(master_data["nonce"])
+        raise HTTPException(status_code=403, detail="Invalid external token")
+
+    # Decrypt master key with root key
+    master_ct = bytes.fromhex(master_key_data["encrypted_key"])
+    master_nonce = bytes.fromhex(master_key_data["nonce"])
 
     try:
         master_key = service.aesgcm_decrypt(root_key, master_nonce, master_ct)
     except Exception:
-        raise HTTPException(status_code=500, detail="Master key decrypt failed")
+        raise HTTPException(status_code=500, detail="Master key decryption failed")
 
-    _runtime["root_key"] = root_key
-    _runtime["master_key"] = master_key
-    _runtime["sealed"] = False
-
-    requests.put(
-        f"{STORAGE_SERVICE_URL}/api/status",
-        json={'sealed': False}
+    # Store decrypted keys in Redis with TTL for security
+    session_id = await state_manager.create_crypto_session(
+        user_id=current_user.user_id,
+        root_key=root_key,
+        master_key=master_key,
+        ttl_seconds=3600  # 1 hour session
     )
 
-    return StatusResponse(sealed=False, message="Unsealed successfully")
+    # Mark vault as unsealed
+    await state_manager.set_vault_sealed(False, current_user.user_id)
+
+    # Clear sensitive data from memory immediately
+    del root_key, master_key, kek
+
+    return StatusResponse(
+        vault=VaultStatus(
+            sealed=False,
+            initialized=True,
+            version="1.0"
+        ),
+        message=f"Vault unsealed successfully. Session: {session_id[:8]}..."
+    )
+
 
 @router.post("/seal", response_model=StatusResponse)
-def seal(current_user: UserInfo = Depends(require_role("admin"))):
-    """Seal the server by wiping keys from memory. Requires admin role."""
-    _runtime["root_key"] = None
-    _runtime["master_key"] = None
-    _runtime["sealed"] = True
+async def seal(current_user: UserInfo = Depends(require_role("admin"))):
+    """Seal the vault by clearing Redis session data"""
+    
+    state_manager = await get_state_manager()
+    
+    # Clear all crypto sessions
+    await state_manager.clear_all_crypto_sessions()
+    
+    # Mark vault as sealed
+    await state_manager.set_vault_sealed(True, current_user.user_id)
 
-    requests.put(
-        f"{STORAGE_SERVICE_URL}/api/status",
-        json={'sealed': True}
+    return StatusResponse(
+        vault=VaultStatus(
+            sealed=True,
+            initialized=await state_manager.is_vault_initialized(),
+            version="1.0"
+        ),
+        message="Vault sealed successfully - all sessions cleared"
     )
 
-    return StatusResponse(sealed=True, message="Sealed successfully")
 
 @router.get("/status", response_model=StatusResponse)
-def status(current_user: UserInfo = Depends(get_current_user)):
-    """Get server seal status. Requires authentication."""
-    response = requests.get(f"{STORAGE_SERVICE_URL}/api/status")
-    if response.status_code == 404:
-        raise HTTPException(status_code=500, detail="Status not found")
+async def status(current_user: UserInfo = Depends(get_current_user)):
+    """Get vault status from Redis state"""
+    
+    state_manager = await get_state_manager()
+    
+    is_initialized = await state_manager.is_vault_initialized()
+    is_sealed = await state_manager.is_vault_sealed()
+    
+    return StatusResponse(
+        vault=VaultStatus(
+            sealed=is_sealed,
+            initialized=is_initialized,
+            version="1.0"
+        ),
+        message="Vault status retrieved"
+    )
 
-    status_data = response.json()
-    return StatusResponse(sealed=status_data['sealed'])
 
 @router.post("/issue-dek", response_model=IssueDEKResponse)
-def issue_dek(current_user: UserInfo = Depends(require_roles(["admin", "crypto"]))):
-    """Issue a new Data Encryption Key (DEK). Requires admin or crypto role."""
-    if _runtime["sealed"]:
-        raise HTTPException(status_code=400, detail="Server is sealed")
+async def issue_dek(current_user: UserInfo = Depends(require_roles(["admin", "crypto"]))):
+    """Issue a new Data Encryption Key (DEK) using Redis session"""
     
+    state_manager = await get_state_manager()
+    storage_client = StorageClient()
+    
+    # Check vault status
+    if await state_manager.is_vault_sealed():
+        raise HTTPException(status_code=400, detail="Vault is sealed")
+
+    # Get active crypto session
+    session_data = await state_manager.get_active_crypto_session()
+    if not session_data:
+        raise HTTPException(status_code=400, detail="No active crypto session - vault may be sealed")
+
     # Initialize crypto service
     service = CryptoService()
 
     # Generate DEK
     dek = os.urandom(32)
-    master_key = _runtime["master_key"]
+    master_key = session_data["master_key"]
 
     dek_nonce, dek_ct = service.aesgcm_encrypt(master_key, dek)
 
-    # Store DEK
-    response = requests.post(
-        f"{STORAGE_SERVICE_URL}/api/keys",
-        json={
-            'key_type': 'dek',
-            'encrypted_key': dek_ct.hex(),
-            'nonce': dek_nonce.hex(),
-            'version': 1,
-            'active': True,
-            'meta': json.dumps({"purpose": "issued_dek"})
-        }
-    )
+    # Store DEK in storage service
+    dek_data = {
+        'key_type': 'dek',
+        'encrypted_key': dek_ct.hex(),
+        'nonce': dek_nonce.hex(),
+        'version': 1,
+        'status': 'active',
+        'meta': json.dumps({
+            "purpose": "issued_dek",
+            "issued_by": current_user.user_id,
+            "issued_at": datetime.utcnow().isoformat()
+        })
+    }
 
-    response.raise_for_status()
-    dek_id = response.json()['id']
+    dek_response = await storage_client.create_key(dek_data)
+
+    # Clear sensitive data
+    del dek, master_key
 
     return IssueDEKResponse(
-        dek_id=dek_id,
-        dek_ciphertext_b64=b64encode(dek_ct).decode()
+        dek_id=dek_response['id'],
+        dek_ciphertext_b64=b64encode(dek_ct).decode(),
+        message="DEK issued successfully"
     )
 
+
 @router.post("/encrypt", response_model=EncryptResponse)
-def encrypt_secret(req: EncryptRequest, current_user: UserInfo = Depends(require_roles(["admin", "crypto"]))):
-    """Encrypt data with a new ephemeral DEK. Requires admin or crypto role."""
-    if _runtime['sealed']:
-        raise HTTPException(status_code=400, detail="Server is sealed")
+async def encrypt_secret(req: EncryptRequest, current_user: UserInfo = Depends(require_roles(["admin", "crypto"]))):
+    """Encrypt data with ephemeral DEK using Redis session"""
+    
+    state_manager = await get_state_manager()
+    storage_client = StorageClient()
+    
+    # Check vault status
+    if await state_manager.is_vault_sealed():
+        raise HTTPException(status_code=400, detail="Vault is sealed")
+
+    # Get active crypto session
+    session_data = await state_manager.get_active_crypto_session()
+    if not session_data:
+        raise HTTPException(status_code=400, detail="No active crypto session")
 
     # Initialize crypto service
     service = CryptoService()
 
-    # Generate empheral DEK
+    # Generate ephemeral DEK
     dek = os.urandom(32)
-    master_key = _runtime['master_key']
+    master_key = session_data["master_key"]
     dek_nonce, dek_ct = service.aesgcm_encrypt(master_key, dek)
 
-    # Store DEK
-    response = requests.post(
-        f"{STORAGE_SERVICE_URL}/api/keys",
-        json={
-            'key_type': 'dek',
-            'encrypted_key': dek_ct.hex(),
-            'nonce': dek_nonce.hex(),
-            'version': 1,
-            'active': True,
-            'meta': json.dumps({"purpose": "ephemeral_dek"})
-        }
-    )
+    # Store ephemeral DEK
+    dek_data = {
+        'key_type': 'dek',
+        'encrypted_key': dek_ct.hex(),
+        'nonce': dek_nonce.hex(),
+        'version': 1,
+        'status': 'active',
+        'meta': json.dumps({
+            "purpose": "ephemeral_dek",
+            "created_by": current_user.user_id,
+            "created_at": datetime.utcnow().isoformat()
+        })
+    }
 
-    response.raise_for_status()
-    dek_id = response.json()['id']
+    dek_response = await storage_client.create_key(dek_data)
 
     # Encrypt plaintext with DEK
-    encryption_nonce, ciphertext = service.aesgcm_encrypt(dek, req.plaintext)
+    encryption_nonce, ciphertext = service.aesgcm_encrypt(dek, req.plaintext.encode() if isinstance(req.plaintext, str) else req.plaintext)
 
+    # Create payload
     payload = {
         'ciphertext': b64encode(ciphertext).decode(),
-        "enc_nonce": b64encode(encryption_nonce).decode()
+        'enc_nonce': b64encode(encryption_nonce).decode()
     }
+
+    # Clear sensitive data
+    del dek, master_key
 
     return EncryptResponse(
         ciphertext_b64=b64encode(json.dumps(payload).encode()).decode(),
-        dek_id=dek_id
+        dek_id=dek_response['id'],
+        message="Data encrypted successfully"
     )
 
-@router.post("/decrypt", response_model=StatusResponse)
-def decrypt_secret(req: DecryptRequest, current_user: UserInfo = Depends(require_roles(["admin", "crypto"]))):
-    """Decrypt data using stored DEK. Requires admin or crypto role."""
-    if _runtime["sealed"]:
-        raise HTTPException(status_code=400, detail="Server is sealed")
+
+@router.post("/decrypt", response_model=DecryptResponse)
+async def decrypt_secret(req: DecryptRequest, current_user: UserInfo = Depends(require_roles(["admin", "crypto"]))):
+    """Decrypt data using stored DEK and Redis session"""
+    
+    state_manager = await get_state_manager()
+    storage_client = StorageClient()
+    
+    # Check vault status
+    if await state_manager.is_vault_sealed():
+        raise HTTPException(status_code=400, detail="Vault is sealed")
+
+    # Get active crypto session
+    session_data = await state_manager.get_active_crypto_session()
+    if not session_data:
+        raise HTTPException(status_code=400, detail="No active crypto session")
 
     # Initialize crypto service
     service = CryptoService()
 
     # Fetch DEK from storage
-    response = requests.get(f"{STORAGE_SERVICE_URL}/api/keys/{req.dek_id}")
-    if response.status_code == 404:
+    try:
+        dek_data = await storage_client.get_key(req.dek_id)
+    except Exception:
         raise HTTPException(status_code=404, detail="DEK not found")
 
-    key_data = response.json()
-
     # Decrypt DEK with master key
-    dek_ct = bytes.fromhex(key_data['encrypted_key'])
-    dek_nonce = bytes.fromhex(key_data['nonce'])
-    master_key = _runtime["master_key"]
+    dek_ct = bytes.fromhex(dek_data['encrypted_key'])
+    dek_nonce = bytes.fromhex(dek_data['nonce'])
+    master_key = session_data["master_key"]
 
     try:
         dek = service.aesgcm_decrypt(master_key, dek_nonce, dek_ct)
-    except:
-        raise HTTPException(status_code=500, detail="DEK decrypt failed")
+    except Exception:
+        raise HTTPException(status_code=500, detail="DEK decryption failed")
 
     # Decrypt payload
-    outer = json.loads(b64encode(req.ciphertext_b64).decode())
-    ciphertext = b64encode(outer['ciphertext'])
-    enc_nonce = b64encode(outer['enc_nonce'])
+    try:
+        payload_bytes = b64decode(req.ciphertext_b64)
+        payload = json.loads(payload_bytes.decode())
+        ciphertext = b64decode(payload['ciphertext'])
+        enc_nonce = b64decode(payload['enc_nonce'])
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid ciphertext format")
 
     try:
         plaintext = service.aesgcm_decrypt(dek, enc_nonce, ciphertext)
-    except:
+    except Exception:
         raise HTTPException(status_code=400, detail="Decryption failed")
-    
-    return StatusResponse(sealed=False, message=f"decrypted: {plaintext}")
+
+    # Clear sensitive data
+    del dek, master_key
+
+    return DecryptResponse(
+        plaintext=plaintext.decode() if isinstance(plaintext, bytes) else plaintext,
+        message="Data decrypted successfully"
+    )

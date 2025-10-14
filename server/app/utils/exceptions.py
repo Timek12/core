@@ -1,7 +1,4 @@
-"""
-Custom exception classes and error handling utilities
-"""
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
@@ -9,12 +6,12 @@ import logging
 import uuid
 from datetime import datetime
 
-from app.dto.common import ErrorResponse, ErrorDetail, ErrorType, StatusEnum
+from app.dto.common import ErrorResponse, ErrorDetail, ErrorType
 
 logger = logging.getLogger(__name__)
 
-class LunaGuardException(Exception):
-    """Base exception for LunaGuard application"""
+class VaultException(Exception):
+    """Base exception for Vaults application"""
     def __init__(
         self, 
         message: str, 
@@ -28,7 +25,7 @@ class LunaGuardException(Exception):
         self.details = details or []
         super().__init__(self.message)
 
-class ValidationException(LunaGuardException):
+class ValidationException(VaultException):
     """Validation error exception"""
     def __init__(self, message: str, details: Optional[List[ErrorDetail]] = None):
         super().__init__(
@@ -38,7 +35,7 @@ class ValidationException(LunaGuardException):
             details=details
         )
 
-class AuthenticationException(LunaGuardException):
+class AuthenticationException(VaultException):
     """Authentication error exception"""
     def __init__(self, message: str = "Authentication failed"):
         super().__init__(
@@ -47,7 +44,7 @@ class AuthenticationException(LunaGuardException):
             status_code=status.HTTP_401_UNAUTHORIZED
         )
 
-class AuthorizationException(LunaGuardException):
+class AuthorizationException(VaultException):
     """Authorization error exception"""
     def __init__(self, message: str = "Access denied"):
         super().__init__(
@@ -56,7 +53,7 @@ class AuthorizationException(LunaGuardException):
             status_code=status.HTTP_403_FORBIDDEN
         )
 
-class NotFoundException(LunaGuardException):
+class NotFoundException(VaultException):
     """Resource not found exception"""
     def __init__(self, resource_type: str, resource_id: str):
         message = f"{resource_type} with ID '{resource_id}' not found"
@@ -66,7 +63,7 @@ class NotFoundException(LunaGuardException):
             status_code=status.HTTP_404_NOT_FOUND
         )
 
-class ConflictException(LunaGuardException):
+class ConflictException(VaultException):
     """Resource conflict exception"""
     def __init__(self, message: str):
         super().__init__(
@@ -75,7 +72,7 @@ class ConflictException(LunaGuardException):
             status_code=status.HTTP_409_CONFLICT
         )
 
-class ExternalServiceException(LunaGuardException):
+class ExternalServiceException(VaultException):
     """External service error exception"""
     def __init__(self, service_name: str, message: str = "External service error"):
         full_message = f"{service_name}: {message}"
@@ -85,7 +82,7 @@ class ExternalServiceException(LunaGuardException):
             status_code=status.HTTP_502_BAD_GATEWAY
         )
 
-class BusinessLogicException(LunaGuardException):
+class BusinessLogicException(VaultException):
     """Business logic error exception"""
     def __init__(self, message: str):
         super().__init__(
@@ -99,7 +96,7 @@ class VaultSealedException(BusinessLogicException):
     def __init__(self):
         super().__init__("Vault is sealed. Please unseal the vault first.")
 
-class CryptoOperationException(LunaGuardException):
+class CryptoOperationException(VaultException):
     """Cryptographic operation error"""
     def __init__(self, operation: str, reason: str):
         message = f"Cryptographic operation '{operation}' failed: {reason}"
@@ -136,13 +133,13 @@ def validation_error_handler(validation_error: ValidationError) -> List[ErrorDet
         ))
     return details
 
-async def lunaguard_exception_handler(request: Request, exc: LunaGuardException) -> JSONResponse:
-    """Global exception handler for LunaGuard exceptions"""
+async def vault_exception_handler(request: Request, exc: VaultException) -> JSONResponse:
+    """Global exception handler for Vault exceptions"""
     request_id = str(uuid.uuid4())
     
     # Log the error
     logger.error(
-        f"LunaGuard Exception: {exc.message}",
+        f"Vault Exception: {exc.message}",
         extra={
             "request_id": request_id,
             "error_type": exc.error_type,

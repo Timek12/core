@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="LunaGuard Security Service",
+    title="Security Service",
     lifespan=lifespan
 )
 
@@ -68,7 +68,7 @@ def health_check():
 
     return {
         "status": "healthy" if db_status == "healthy" else "unhealthy",
-        "service": "lunaguard-security",
+        "service": "security",
         "database": db_status
     }
 

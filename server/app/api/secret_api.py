@@ -5,8 +5,8 @@ import httpx
 
 from app.utils.jwt_utils import get_current_user
 
-from ..dto.secret import SecretCreate, SecretResponse, SecretUpdate
-from ..clients.storage_client import StorageClient
+from app.dto.secret import SecretCreate, SecretResponse, SecretUpdate
+from app.clients.storage_client import StorageClient
 
 router = APIRouter(prefix="/api/secrets", tags=["secrets"])
 storage_client = StorageClient()

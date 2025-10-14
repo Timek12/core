@@ -60,7 +60,7 @@ def health_check():
         
         return {
             "status": "healthy",
-            "service": "lunaguard-storage",
+            "service": "storage",
             "database": "healthy",
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
@@ -71,7 +71,7 @@ def health_check():
             status_code=503,
             detail={
                 "status": "unhealthy",
-                "service": "lunaguard-storage",
+                "service": "storage",
                 "database": "unhealthy",
                 "error": str(e),
                 "timestamp": datetime.now(timezone.utc).isoformat()
