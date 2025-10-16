@@ -6,13 +6,11 @@ from dotenv import load_dotenv
 import sys
 import os
 
-from core.server.app.api import secret_api
-
 # Add the project root to Python path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from app.api import crypto_api
+from app.api import secret_api, crypto_api
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

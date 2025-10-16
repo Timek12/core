@@ -63,9 +63,9 @@ services:
     restart: unless-stopped
 
   storage:
-    build: ./core/storage
+    build: ./storage
     env_file:
-      - ./core/storage/.env
+      - ./storage/.env
     environment:
       DB_HOST: postgres-storage
       DB_NAME: storage
@@ -88,9 +88,9 @@ services:
       start_period: 30s
 
   security:
-    build: ./core/security
+    build: ./security
     env_file:
-      - ./core/security/.env
+      - ./security/.env
     environment:
       DB_HOST: postgres-security
       DB_NAME: security
@@ -114,9 +114,9 @@ services:
       start_period: 30s
 
   server:
-    build: ./core/server
+    build: ./server
     env_file:
-      - ./core/server/.env
+      - ./server/.env
     environment:
       STORAGE_SERVICE_URL: http://storage:8002
       REDIS_HOST: redis

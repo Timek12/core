@@ -123,8 +123,8 @@ def provision_schema():
                     logger.info("Schema does not exist - creating tables")
 
                     # Enable UUID extension
-                    with conn.begin():
-                        conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'))
+                    conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'))
+                    conn.commit()
 
                     # Create all tables
                     Base.metadata.create_all(engine)
