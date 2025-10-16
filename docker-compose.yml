@@ -1,0 +1,164 @@
+services:
+  # PostgreSQL for Storage microservice
+  postgres-storage:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: storage
+      POSTGRES_USER: storage_user
+      POSTGRES_PASSWORD: storage_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_storage_data:/var/lib/postgresql/data
+    networks:
+      - network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U storage_user -d storage"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # PostgreSQL for Security microservice
+  postgres-security:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: security
+      POSTGRES_USER: security_user
+      POSTGRES_PASSWORD: security_pass
+    ports:
+      - "5433:5432"  # Different host port
+    volumes:
+      - postgres_security_data:/var/lib/postgresql/data
+    networks:
+      - network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U security_user -d security"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Redis for shared state management
+  redis:
+    image: redis:8-alpine
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-redis_pass}
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  storage:
+    build: ./core/storage
+    env_file:
+      - ./core/storage/.env
+    environment:
+      DB_HOST: postgres-storage
+      DB_NAME: storage
+      DB_USER: storage_user
+      DB_PASSWORD: storage_pass
+      DB_PORT: 5432
+    ports:
+      - "8002:8002"
+    networks:
+      - network
+    depends_on:
+      postgres-storage:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  security:
+    build: ./core/security
+    env_file:
+      - ./core/security/.env
+    environment:
+      DB_HOST: postgres-security
+      DB_NAME: security
+      DB_USER: security_user
+      DB_PASSWORD: security_pass
+      DB_PORT: 5432
+      PORT: 8001
+    ports:
+      - "8001:8001"
+    networks:
+      - network
+    depends_on:
+      postgres-security:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  server:
+    build: ./core/server
+    env_file:
+      - ./core/server/.env
+    environment:
+      STORAGE_SERVICE_URL: http://storage:8002
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_pass}
+    ports:
+      - "8000:8000"
+    networks:
+      - network
+    depends_on:
+      storage:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    networks:
+      - network
+    depends_on:
+      - postgres-storage
+      - postgres-security
+    restart: unless-stopped
+
+volumes:
+  postgres_storage_data:
+  postgres_security_data:
+  redis_data:
+
+networks:
+  network:
+    driver: bridge
