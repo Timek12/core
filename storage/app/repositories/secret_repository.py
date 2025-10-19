@@ -14,6 +14,10 @@ class SecretRepository:
         """Get all secrets."""
         return self.db.query(Secrets).all()
     
+    def find_by_user_id(self, user_id: int) -> List[Secrets]:
+        """Find all secrets for a specific user."""
+        return self.db.query(Secrets).filter(Secrets.user_id == user_id).all()
+    
     def find_by_id(self, secret_id: uuid.UUID) -> Optional[Secrets]:
         """Find secret by ID."""
         return self.db.query(Secrets).filter(Secrets.id == secret_id).first()

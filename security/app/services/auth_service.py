@@ -59,7 +59,7 @@ class AuthService:
             provider_user_id=user_data.provider_user_id,
             auth_method=user_data.auth_method,
             provider=user_data.provider,
-            password_hash=self.hash_password(user_data.password_hash) if user_data.password_hash else None,
+            password_hash=self.hash_password(user_data.password) if user_data.password else None,
             email_verified=True,
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc)
@@ -126,10 +126,14 @@ class AuthService:
     
     def create_token_pair(self, user: Users, device_info: Optional[str] = None,
                         ip_address: Optional[str] = None) -> TokenPair:
-        # Get user roles (assuming user has roles attribute or default to ["user"])
-        user_roles = getattr(user, 'roles', ["user"])
-        if isinstance(user_roles, str):
-            user_roles = [user_roles]
+        # Get user role (single role field, convert enum to string)
+        user_role = user.role.value if hasattr(user.role, 'value') else str(user.role)
+        user_roles = [user_role]
+        
+        # Debug logging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Creating token for user {user.email} with role: {user_role}, roles list: {user_roles}")
         
         access_token, _ = self.create_access_token(user.user_id, user.email, user_roles)
         refresh_token, _ = self.create_refresh_token(user.user_id, device_info, ip_address)
@@ -216,10 +220,9 @@ class AuthService:
         if not user:
             return None
         
-        # Get user roles
-        user_roles = getattr(user, 'roles', ["user"])
-        if isinstance(user_roles, str):
-            user_roles = [user_roles]
+        # Get user role (single role field, convert enum to string)
+        user_role = user.role.value if hasattr(user.role, 'value') else str(user.role)
+        user_roles = [user_role]
         
         # Create new access token only (old behavior)
         access_token, _ = self.create_access_token(user.user_id, user.email, user_roles)

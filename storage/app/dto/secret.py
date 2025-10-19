@@ -11,7 +11,7 @@ class SecretBase(BaseModel):
     version: int = Field(default=1)
 
 class SecretCreate(SecretBase):
-    pass
+    user_id: int
 
 class SecretUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=256)
@@ -22,6 +22,7 @@ class SecretUpdate(BaseModel):
 
 class SecretResponse(SecretBase):
     id: uuid.UUID
+    user_id: int
     created_at: datetime
     updated_at: datetime
     

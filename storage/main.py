@@ -6,6 +6,7 @@ import sys
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from fastapi import HTTPException
 from sqlalchemy import text
@@ -13,7 +14,7 @@ from sqlalchemy import text
 sys.path.append('/app')  # Add the app directory to Python path for Docker
 
 from app.db.schema import provision_schema
-from app.internal import secret_api, key_api, status_api
+from app.internal import secret_api, key_api, status_api, dek_api
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -45,10 +46,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Include routers
 app.include_router(secret_api.router)
 app.include_router(key_api.router)
 app.include_router(status_api.router)
+app.include_router(dek_api.router)
 
 @app.get("/health")
 def health_check():

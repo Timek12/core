@@ -16,6 +16,11 @@ class SecretService:
     def get_all_secrets(self) -> List[SecretResponse]:
         secrets = self.repository.find_all()
         return [SecretResponse.from_orm(secret) for secret in secrets]
+    
+    def get_secrets_by_user_id(self, user_id: int) -> List[SecretResponse]:
+        """Get all secrets for a specific user"""
+        secrets = self.repository.find_by_user_id(user_id)
+        return [SecretResponse.from_orm(secret) for secret in secrets]
 
     def get_secret_by_id(self, secret_id: uuid.UUID) -> Optional[SecretResponse]:
         secret = self.repository.find_by_id(secret_id)
@@ -24,6 +29,7 @@ class SecretService:
     def create_secret(self, secret_data: SecretCreate) -> SecretResponse:
         secret = Secrets(
             id=uuid.uuid4(),
+            user_id=secret_data.user_id,
             name=secret_data.name, 
             description=secret_data.description,
             key_id=secret_data.key_id,
@@ -41,9 +47,11 @@ class SecretService:
         if not secret:
             return None
         
-        update_dict: secret_data.model_dump(exclude_unset=True)
+        # Use dict() for Pydantic v1 compatibility
+        update_dict = dict(secret_data)
         for field, value in update_dict.items():
-            setattr(secret, field, value)
+            if value is not None:
+                setattr(secret, field, value)
 
         secret.updated_at = datetime.now(timezone.utc)
 

@@ -1,8 +1,9 @@
 import uuid
+import enum
 from datetime import datetime, timezone
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, Boolean, 
-    TIMESTAMP, ForeignKey, UniqueConstraint, Index, inspect
+    TIMESTAMP, ForeignKey, UniqueConstraint, Index, inspect, Enum
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID, INET as PGINET
 from sqlalchemy.sql import text
@@ -11,6 +12,13 @@ from sqlalchemy.orm import declarative_base
 from app.db.db import create_database_url
 
 Base = declarative_base()
+
+
+class UserRole(str, enum.Enum):
+    """User role enumeration"""
+    USER = "user"
+    ADMIN = "admin"
+    MODERATOR = "moderator"
 
 class Users(Base):
     """Users table for authentication (used by security service)"""
@@ -25,6 +33,7 @@ class Users(Base):
     provider = Column(String(50), nullable=False, default='github')
     password_hash = Column(String(255), nullable=True)
     email_verified = Column(Boolean, default=False)
+    role = Column(Enum(UserRole, name='user_role', native_enum=False), default=UserRole.USER, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     
@@ -32,6 +41,7 @@ class Users(Base):
         UniqueConstraint('provider_user_id', 'provider', name='uq_users_provider_user_id'),
         Index('idx_users_email', 'email'),
         Index('idx_users_provider_user_id', 'provider', 'provider_user_id'),
+        Index('idx_users_role', 'role'),
     )
 
 class OAuthRefreshTokens(Base):
@@ -165,7 +175,23 @@ def provision_schema():
                     # Create all tables
                     Base.metadata.create_all(engine)
                     
-                    logger.info("Schema provisioned sucessfully")
+                    logger.info("Schema provisioned successfully")
+                    
+                    # Seed initial data
+                    logger.info("Seeding initial users...")
+                    from sqlalchemy.orm import Session
+                    from app.db.seed import seed_initial_users
+                    
+                    session = Session(bind=engine)
+                    try:
+                        seed_success = seed_initial_users(session)
+                        if seed_success:
+                            logger.info("Initial data seeding completed")
+                        else:
+                            logger.warning("Initial data seeding had issues, but schema is provisioned")
+                    finally:
+                        session.close()
+                    
                     return True
                 
                 finally:

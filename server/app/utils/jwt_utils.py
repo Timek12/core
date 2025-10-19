@@ -41,6 +41,10 @@ class JWTValidator:
 jwt_validator = JWTValidator()
 security = HTTPBearer()
 
+async def get_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """Get the raw JWT token string"""
+    return credentials.credentials
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)) -> UserInfo:
     try:

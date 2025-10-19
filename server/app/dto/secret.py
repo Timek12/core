@@ -29,12 +29,37 @@ class SecretBase(BaseModel):
 class SecretCreate(SecretBase):
     """Schema for creating a secret"""
     user_id: Optional[str] = Field(None, description="User ID (set automatically from JWT)")
+
+class SecretCreateRequest(BaseModel):
+    """Schema for creating a secret from the frontend (before encryption)"""
+    name: str = Field(..., min_length=1, max_length=256, description="Secret name")
+    value: str = Field(..., min_length=1, description="Secret value (will be encrypted)")
+    description: Optional[str] = Field("", max_length=1000, description="Secret description")
     
+    @validator('name')
+    def validate_name(cls, v):
+        if not v.strip():
+            raise ValueError('Name cannot be empty or whitespace only')
+        return v.strip()
+    
+class SecretUpdateRequest(BaseModel):
+    """Schema for updating a secret from the frontend (before encryption)"""
+    name: Optional[str] = Field(None, min_length=1, max_length=256, description="Secret name")
+    value: Optional[str] = Field(None, min_length=1, description="Secret value (will be encrypted)")
+    description: Optional[str] = Field(None, max_length=1000, description="Secret description")
+    
+    @validator('name')
+    def validate_name(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError('Name cannot be empty or whitespace only')
+        return v.strip() if v else v
+
 class SecretUpdate(BaseModel):
-    """Schema for updating a secret"""
+    """Schema for updating a secret (internal, after encryption)"""
     name: Optional[str] = Field(None, min_length=1, max_length=256, description="Secret name")
     description: Optional[str] = Field(None, max_length=1000, description="Secret description")
     key_id: Optional[uuid.UUID] = Field(None, description="Encryption key ID")
+    dek_id: Optional[uuid.UUID] = Field(None, description="Data Encryption Key ID")
     encrypted_value: Optional[str] = Field(None, description="Encrypted secret value")
     version: Optional[int] = Field(None, ge=1, description="Secret version")
     tags: Optional[List[str]] = Field(None, description="Tags for categorization")

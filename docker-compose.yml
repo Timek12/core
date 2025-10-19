@@ -62,6 +62,29 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  redis-commander:
+    image: ghcr.io/joeferner/redis-commander:latest
+    container_name: redis-commander
+    user: redis                       # avoid permission errors (see repo notes)
+    environment:
+      # UI auth
+      HTTP_USER: admin
+      HTTP_PASSWORD: ${REDIS_COMM_PASSWORD:-rc_admin_pass}
+
+      # connect to the redis service in this compose network (passworded)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_pass}
+
+    ports:
+      - "127.0.0.1:8081:8081"         # bind to localhost only
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - network
+    restart: unless-stopped
+
   storage:
     build: ./storage
     env_file:

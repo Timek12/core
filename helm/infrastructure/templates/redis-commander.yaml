@@ -1,0 +1,44 @@
+{{- if .Values.redis-commander.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.redis-commander.fullnameOverride }}
+  namespace: {{ .Values.namespace.name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.redis-commander.fullnameOverride }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.redis-commander.fullnameOverride }}
+    spec:
+      containers:
+      - name: redis-commander
+        image: {{ .Values.redis-commander.image.repository }}:{{ .Values.redis-commander.image.tag }}
+        imagePullPolicy: {{ .Values.redis-commander.image.pullPolicy }}
+        ports:
+        - containerPort: 8081
+          name: http
+        env:
+        - name: REDIS_HOSTS
+          value: "local:{{ .Values.redis-commander.redis.host }}:{{ .Values.redis-commander.redis.port }}:0:{{ .Values.redis-commander.redis.password }}"
+        resources:
+          {{- toYaml .Values.redis-commander.resources | nindent 10 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.redis-commander.fullnameOverride }}
+  namespace: {{ .Values.namespace.name }}
+spec:
+  type: {{ .Values.redis-commander.service.type }}
+  ports:
+  - port: {{ .Values.redis-commander.service.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: {{ .Values.redis-commander.fullnameOverride }}
+{{- end }}

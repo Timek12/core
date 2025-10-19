@@ -141,6 +141,42 @@ class RevokeTokenRequest(BaseModel):
     token: str  # Can be access or refresh token
     token_type_hint: Optional[TokenType] = None
 
+
+# Session DTOs
+class SessionInfo(BaseModel):
+    """Schema for session information."""
+    jti: str
+    device_info: Optional[str] = None
+    ip_address: Optional[str] = None
+    created_at: datetime
+    expires_at: datetime
+
+
+class SessionsResponse(BaseModel):
+    """Schema for sessions list response."""
+    active_sessions: int
+    sessions: list[SessionInfo]
+
+
+class MessageResponse(BaseModel):
+    """Generic message response."""
+    message: str
+
+
+class LogoutAllResponse(BaseModel):
+    """Response for logout from all devices."""
+    message: str
+    revoked_tokens: int
+
+
+class TokenVerificationResponse(BaseModel):
+    """Response for token verification."""
+    valid: bool
+    user_id: Optional[str] = None
+    email: Optional[str] = None
+    expires_at: Optional[int] = None
+
+
 class TokenVerificationError(Exception):
     """Base exception for token verification errors"""
     pass

@@ -1,0 +1,140 @@
+# Global settings
+global:
+  imagePullPolicy: IfNotPresent
+  imageRegistry: ghcr.io
+  imageOrganization: lunaguard
+
+# Security Service
+security:
+  enabled: true
+  namespace:
+    name: security
+    create: true
+  image:
+    repository: security
+    tag: latest
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+  env:
+    - name: DATABASE_HOST
+      value: postgresql-security.infrastructure.svc.cluster.local
+    - name: DATABASE_PORT
+      value: "5432"
+    - name: DATABASE_NAME
+      value: security_db
+    - name: DATABASE_USER
+      value: security_user
+  secrets:
+    DATABASE_PASSWORD: security_password
+    JWT_SECRET_KEY: your-jwt-secret-key-change-this
+    JWT_ALGORITHM: HS256
+    ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+
+# Server Service
+server:
+  enabled: true
+  namespace:
+    name: server
+    create: true
+  image:
+    repository: server
+    tag: latest
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8001
+    targetPort: 8001
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+  env:
+    - name: REDIS_HOST
+      value: redis.infrastructure.svc.cluster.local
+    - name: REDIS_PORT
+      value: "6379"
+    - name: STORAGE_SERVICE_URL
+      value: http://storage.storage.svc.cluster.local:8002
+    - name: SECURITY_SERVICE_URL
+      value: http://security.security.svc.cluster.local:8000
+  secrets:
+    REDIS_PASSWORD: redis_password
+    JWT_SECRET_KEY: your-jwt-secret-key-change-this
+    JWT_ALGORITHM: HS256
+
+# Storage Service
+storage:
+  enabled: true
+  namespace:
+    name: storage
+    create: true
+  image:
+    repository: storage
+    tag: latest
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8002
+    targetPort: 8002
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+  env:
+    - name: DATABASE_HOST
+      value: postgresql-storage.infrastructure.svc.cluster.local
+    - name: DATABASE_PORT
+      value: "5432"
+    - name: DATABASE_NAME
+      value: storage_db
+    - name: DATABASE_USER
+      value: storage_user
+  secrets:
+    DATABASE_PASSWORD: storage_password
+    JWT_SECRET_KEY: your-jwt-secret-key-change-this
+    JWT_ALGORITHM: HS256
+    MASTER_KEY: your-master-encryption-key-change-this
+
+# UI Service
+ui:
+  enabled: true
+  namespace:
+    name: ui
+    create: true
+  image:
+    repository: ui
+    tag: latest
+  replicaCount: 1
+  service:
+    type: LoadBalancer
+    port: 80
+    targetPort: 80
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 200m
+  env:
+    - name: VITE_API_URL
+      value: http://server.server.svc.cluster.local:8001
+    - name: VITE_AUTH_URL
+      value: http://security.security.svc.cluster.local:8000
+  secrets: {}

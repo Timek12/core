@@ -1,0 +1,127 @@
+namespace:
+  name: infrastructure
+  create: true
+
+# PostgreSQL for Security Service
+postgresql-security:
+  enabled: true
+  fullnameOverride: postgresql-security
+  auth:
+    username: security_user
+    password: security_password
+    database: security_db
+    postgresPassword: postgres_password
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+      storageClass: ""
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+  service:
+    type: ClusterIP
+    port: 5432
+
+# PostgreSQL for Storage Service
+postgresql-storage:
+  enabled: true
+  fullnameOverride: postgresql-storage
+  auth:
+    username: storage_user
+    password: storage_password
+    database: storage_db
+    postgresPassword: postgres_password
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+      storageClass: ""
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+  service:
+    type: ClusterIP
+    port: 5432
+
+# Redis
+redis:
+  enabled: true
+  fullnameOverride: redis
+  auth:
+    enabled: true
+    password: redis_password
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+      storageClass: ""
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+  replica:
+    replicaCount: 0
+  service:
+    type: ClusterIP
+    port: 6379
+
+# Redis Commander
+redis-commander:
+  enabled: true
+  fullnameOverride: redis-commander
+  image:
+    repository: rediscommander/redis-commander
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8081
+  redis:
+    host: redis
+    port: 6379
+    password: redis_password
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 200m
+
+# PgAdmin
+pgadmin:
+  enabled: true
+  fullnameOverride: pgadmin
+  image:
+    repository: dpage/pgadmin4
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  env:
+    email: admin@admin.com
+    password: admin_password
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: ""
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 200m
+    limits:
+      memory: 512Mi
+      cpu: 400m

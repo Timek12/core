@@ -24,13 +24,20 @@ class RedisStateManager:
         self.redis_db = int(os.getenv('REDIS_DB', 0))
         
         # Encryption key for sensitive data
-        encryption_key = os.getenv('VAULT_ENCRYPTION_KEY')
+        encryption_key = os.getenv('VAULT_ENCRYPTION_KEY') or os.getenv('ENCRYPTION_KEY')
         if not encryption_key:
             # Generate a key if not provided
-            logger.warning("No VAULT_ENCRYPTION_KEY provided, generated temporary key")
-            # TODO: RETURN ERROR
+            logger.warning("No VAULT_ENCRYPTION_KEY provided, generating temporary key")
+            encryption_key = Fernet.generate_key().decode()
         
-        self.cipher = Fernet(encryption_key.encode() if isinstance(encryption_key, str) else encryption_key)
+        # Ensure the key is properly formatted
+        try:
+            self.cipher = Fernet(encryption_key.encode() if isinstance(encryption_key, str) else encryption_key)
+        except Exception as e:
+            logger.error(f"Invalid encryption key format: {e}")
+            # Generate a valid key as fallback
+            encryption_key = Fernet.generate_key().decode()
+            self.cipher = Fernet(encryption_key.encode())
         
         # Redis connection pool
         self.pool = None
@@ -45,17 +52,31 @@ class RedisStateManager:
     async def initialize(self):
         """Initialize Redis connection pool"""
         try:
-            self.pool = redis.ConnectionPool(
-                host=self.redis_host,
-                port=self.redis_port,
-                password=self.redis_password,
-                db=self.redis_db,
-                decode_responses=True,
-                max_connections=20,
-                retry_on_timeout=True,
-                socket_keepalive=True,
-                socket_keepalive_options={1: 1, 2: 3, 3: 5}
-            )
+            # Build connection pool parameters
+            pool_kwargs = {
+                'host': self.redis_host,
+                'port': self.redis_port,
+                'password': self.redis_password,
+                'db': self.redis_db,
+                'decode_responses': True,
+                'max_connections': 20,
+                'retry_on_timeout': True,
+                'socket_keepalive': True
+            }
+            
+            # Add socket keepalive options with proper constants
+            try:
+                import socket
+                pool_kwargs['socket_keepalive_options'] = {
+                    socket.TCP_KEEPIDLE: 1,
+                    socket.TCP_KEEPINTVL: 3,
+                    socket.TCP_KEEPCNT: 5
+                }
+            except (AttributeError, OSError):
+                # Skip keepalive options if not supported on this platform
+                logger.warning("TCP keepalive options not supported on this platform")
+            
+            self.pool = redis.ConnectionPool(**pool_kwargs)
             
             self.redis_client = redis.Redis(connection_pool=self.pool)
             
@@ -140,7 +161,6 @@ class RedisStateManager:
             
             pipe.set(f"{self.VAULT_PREFIX}initialized", "true")
             pipe.set(f"{self.VAULT_PREFIX}init_time", datetime.utcnow().isoformat())
-            pipe.set(f"{self.VAULT_PREFIX}init_user", user_id or "unknown")
             
             # Audit log
             audit_entry = {
@@ -162,34 +182,44 @@ class RedisStateManager:
     async def store_master_key(self, encrypted_master_key: str, ttl_hours: int = 1):
         """Store encrypted master key with TTL for security"""
         try:
+            key = f"{self.KEY_PREFIX}master"
+            logger.info(f"Storing master key at Redis key: {key}, input length: {len(encrypted_master_key)}")
+            
             # Double encrypt the master key
             double_encrypted = self._encrypt_sensitive_data(encrypted_master_key)
+            logger.info(f"Master key encrypted, encrypted length: {len(double_encrypted)}")
             
             # Store with TTL
             ttl_seconds = ttl_hours * 3600
             await self.redis_client.setex(
-                f"{self.KEY_PREFIX}master",
+                key,
                 ttl_seconds,
                 double_encrypted
             )
             
-            logger.info(f"Master key stored with {ttl_hours}h TTL")
+            logger.info(f"Master key stored successfully at {key} with {ttl_hours}h TTL ({ttl_seconds}s)")
             
         except Exception as e:
-            logger.error(f"Error storing master key: {e}")
+            logger.error(f"Error storing master key: {e}", exc_info=True)
             raise
 
     async def get_master_key(self) -> Optional[str]:
         """Retrieve and decrypt master key"""
         try:
-            double_encrypted = await self.redis_client.get(f"{self.KEY_PREFIX}master")
+            key = f"{self.KEY_PREFIX}master"
+            logger.info(f"Attempting to get master key from Redis with key: {key}")
+            double_encrypted = await self.redis_client.get(key)
             if not double_encrypted:
+                logger.warning(f"Master key not found in Redis at key: {key}")
                 return None
             
-            return self._decrypt_sensitive_data(double_encrypted)
+            logger.info("Master key found in Redis, decrypting...")
+            decrypted = self._decrypt_sensitive_data(double_encrypted)
+            logger.info(f"Master key successfully decrypted, length: {len(decrypted) if decrypted else 0}")
+            return decrypted
             
         except Exception as e:
-            logger.error(f"Error retrieving master key: {e}")
+            logger.error(f"Error retrieving master key: {e}", exc_info=True)
             return None
 
     async def store_root_key_info(self, root_key_info: Dict[str, Any]):

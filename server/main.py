@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from dotenv import load_dotenv
 import sys
@@ -19,6 +20,15 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = FastAPI(title="Key Management System API")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Include routers
 app.include_router(crypto_api.router)

@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
 from app.services.crypto_service import CryptoService
 from app.clients.storage_client import StorageClient
-from app.utils.jwt_utils import get_current_user, require_role, require_roles, UserInfo
+from app.utils.jwt_utils import get_current_user, require_role, require_roles, UserInfo, get_token
 from app.utils.redis_state import get_state_manager
 from dotenv import load_dotenv
 import os
@@ -16,7 +16,7 @@ load_dotenv()
 router = APIRouter(prefix="/api/crypto", tags=["crypto"])
 
 @router.post("/init", response_model=StatusResponse)
-async def init(req: InitRequest, current_user: UserInfo = Depends(require_role("admin"))):
+async def init(req: InitRequest, current_user: UserInfo = Depends(require_role("admin")), token: str = Depends(get_token)):
     """Initialize the vault with Redis state management"""
     
     state_manager = await get_state_manager()
@@ -60,8 +60,8 @@ async def init(req: InitRequest, current_user: UserInfo = Depends(require_role("
         'meta': json.dumps({"derived_from": "root"})
     }
 
-    root_response = await storage_client.create_key(root_key_data)
-    master_response = await storage_client.create_key(master_key_data)
+    root_response = await storage_client.create_key(root_key_data, token)
+    master_response = await storage_client.create_key(master_key_data, token)
 
     # Store root key metadata in Redis
     await state_manager.store_root_key_info({
@@ -89,7 +89,7 @@ async def init(req: InitRequest, current_user: UserInfo = Depends(require_role("
 
 
 @router.post("/unseal", response_model=StatusResponse)
-async def unseal(req: UnsealRequest, current_user: UserInfo = Depends(require_role("admin"))):
+async def unseal(req: UnsealRequest, current_user: UserInfo = Depends(require_role("admin")), token: str = Depends(get_token)):
     """Unseal the vault using Redis for session management"""
     
     state_manager = await get_state_manager()
@@ -105,10 +105,10 @@ async def unseal(req: UnsealRequest, current_user: UserInfo = Depends(require_ro
         raise HTTPException(status_code=500, detail="Root key metadata not found")
 
     # Fetch encrypted root key from storage
-    root_key_data = await storage_client.get_key(root_key_info["storage_id"])
+    root_key_data = await storage_client.get_key_by_id(root_key_info["storage_id"], token)
     
     # Find and fetch master key
-    master_keys = await storage_client.list_keys(filters={"key_type": "master", "status": "active"})
+    master_keys = await storage_client.get_all_keys(key_type="master", jwt_token=token)
     if not master_keys:
         raise HTTPException(status_code=500, detail="Master key not found")
     master_key_data = master_keys[0]
@@ -137,13 +137,8 @@ async def unseal(req: UnsealRequest, current_user: UserInfo = Depends(require_ro
     except Exception:
         raise HTTPException(status_code=500, detail="Master key decryption failed")
 
-    # Store decrypted keys in Redis with TTL for security
-    session_id = await state_manager.create_crypto_session(
-        user_id=current_user.user_id,
-        root_key=root_key,
-        master_key=master_key,
-        ttl_seconds=3600  # 1 hour session
-    )
+    # Store decrypted master key in Redis with TTL for security (as hex string)
+    await state_manager.store_master_key(master_key.hex(), ttl_hours=1)
 
     # Mark vault as unsealed
     await state_manager.set_vault_sealed(False, current_user.user_id)
@@ -157,7 +152,7 @@ async def unseal(req: UnsealRequest, current_user: UserInfo = Depends(require_ro
             initialized=True,
             version="1.0"
         ),
-        message=f"Vault unsealed successfully. Session: {session_id[:8]}..."
+        message=f"Vault unsealed successfully"
     )
 
 
@@ -167,8 +162,8 @@ async def seal(current_user: UserInfo = Depends(require_role("admin"))):
     
     state_manager = await get_state_manager()
     
-    # Clear all crypto sessions
-    await state_manager.clear_all_crypto_sessions()
+    # Clear sensitive keys (master key, etc.)
+    await state_manager.clear_sensitive_keys()
     
     # Mark vault as sealed
     await state_manager.set_vault_sealed(True, current_user.user_id)
@@ -333,7 +328,7 @@ async def decrypt_secret(req: DecryptRequest, current_user: UserInfo = Depends(r
 
     # Fetch DEK from storage
     try:
-        dek_data = await storage_client.get_key(req.dek_id)
+        dek_data = await storage_client.get_key_by_id(req.dek_id)
     except Exception:
         raise HTTPException(status_code=404, detail="DEK not found")
 

@@ -12,15 +12,21 @@ class UserBase(BaseModel):
     provider: str = Field(default='local', max_length=50)
 
 
+class LoginRequest(BaseModel):
+    """Schema for user login - credentials in request body."""
+    email: EmailStr
+    password: str = Field(..., min_length=6, max_length=255)
+
+
 class UserCreate(BaseModel):
     """Schema for creating a user."""
     email: EmailStr
     name: Optional[str] = None
+    password: Optional[str] = Field(None, min_length=6, max_length=255)
     avatar_url: Optional[str] = None
     provider_user_id: Optional[str] = Field(None, max_length=255)
     auth_method: str = Field(default='local', max_length=50)
     provider: str = Field(default='local', max_length=50)
-    password_hash: Optional[str] = Field(None, max_length=255)
     email_verified: bool = Field(default=False)
 
 
@@ -39,6 +45,7 @@ class UserResponse(UserBase):
     user_id: int
     provider_user_id: Optional[str] = None
     email_verified: bool
+    role: str = Field(..., description="User role: user, admin, or moderator")
     created_at: datetime
     updated_at: datetime
     
@@ -53,6 +60,7 @@ class UserPublic(BaseModel):
     name: Optional[str] = None
     avatar_url: Optional[str] = None
     provider: str
+    role: str = Field(..., description="User role: user, admin, or moderator")
     
     class Config:
         from_attributes = True

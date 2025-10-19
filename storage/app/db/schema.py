@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+import uuid
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, Boolean,
     TIMESTAMP, Index, inspect
@@ -17,9 +18,11 @@ class Secrets(Base):
     __tablename__ = 'secrets'
     
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(Integer, nullable=False)
     name = Column(String(256), nullable=False)
     description = Column(Text, nullable=False)
-    key_id = Column(PGUUID(as_uuid=True), nullable=False)
+    key_id = Column(PGUUID(as_uuid=True), nullable=False)  # Master key reference (for backward compatibility)
+    dek_id = Column(PGUUID(as_uuid=True), nullable=True)  # Data Encryption Key reference
     encrypted_value = Column(Text, nullable=False)
     version = Column(Integer, nullable=False, default=1)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -28,6 +31,8 @@ class Secrets(Base):
     __table_args__ = (
         Index('idx_secrets_name', 'name'),
         Index('idx_secrets_key_id', 'key_id'),
+        Index('idx_secrets_dek_id', 'dek_id'),
+        Index('idx_secrets_user_id', 'user_id'),
     )
 
 class Keys(Base):
@@ -42,6 +47,22 @@ class Keys(Base):
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     meta = Column(String, nullable=True)
+
+class DataEncryptionKeys(Base):
+    """Data Encryption Keys table (DEKs encrypted with master key)"""
+    __tablename__ = 'data_encryption_keys'
+    
+    id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    encrypted_dek = Column(Text, nullable=False)  # DEK encrypted with master key
+    nonce = Column(Text, nullable=False)  # Nonce used for DEK encryption
+    version = Column(Integer, nullable=False, default=1)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+    rotated_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    
+    __table_args__ = (
+        Index('idx_dek_is_active', 'is_active'),
+    )
 
 class ServerStatus(Base):
     """Server status table (for server state management)"""
@@ -58,7 +79,7 @@ def schema_exists(engine) -> bool:
     existing_tables = inspector.get_table_names()
 
     # Define required tables for this service
-    required_tables = {'secrets', 'keys', 'server_status'}
+    required_tables = {'secrets', 'keys', 'data_encryption_keys', 'server_status'}
 
     # Check if all required tables exist
     return required_tables.issubset(set(existing_tables))

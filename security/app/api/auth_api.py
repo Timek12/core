@@ -5,10 +5,11 @@ from sqlalchemy.orm import Session
 
 from app.db.db import get_db
 from app.services.auth_service import AuthService
-from app.dto.user import UserCreate, UserResponse, UserPublic
+from app.dto.user import UserCreate, UserResponse, UserPublic, LoginRequest
 from app.dto.token import (
     TokenPair, LoginResponse, RefreshTokenRequest, 
-    RefreshTokenResponse, RevokeTokenRequest
+    RefreshTokenResponse, RevokeTokenRequest, SessionsResponse,
+    MessageResponse, LogoutAllResponse, TokenVerificationResponse, SessionInfo
 )
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -119,17 +120,16 @@ def login(
 
 @router.post("/login", response_model=LoginResponse)
 def login_json(
-    email: str,
-    password: str,
+    credentials: LoginRequest,
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """JSON login endpoint"""
+    """JSON login endpoint - accepts email/password in request body (SECURE)"""
 
     auth_service = AuthService(db)
 
     # Authenticate
-    user = auth_service.authenticate_user(email, password)
+    user = auth_service.authenticate_user(credentials.email, credentials.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -199,7 +199,7 @@ def get_current_user_info(current_user: Annotated[UserResponse, Depends(get_curr
     return UserPublic.from_orm(current_user)
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=MessageResponse)
 def logout(revoke_request: RevokeTokenRequest, current_user: Annotated[UserResponse, Depends(get_current_user)], db: Session = Depends(get_db)):
     """Logout by revoking refresh token."""
 
@@ -212,10 +212,10 @@ def logout(revoke_request: RevokeTokenRequest, current_user: Annotated[UserRespo
             detail="Invalid token or already revoked"
         )
 
-    return {"message": "Successfully logged out"}
+    return MessageResponse(message="Successfully logged out")
 
 
-@router.post("/logout-all")
+@router.post("/logout-all", response_model=LogoutAllResponse)
 def logout_all_devices(current_user: Annotated[UserResponse, Depends(get_current_active_user)], db: Session = Depends(get_db)):
     """Logout from all devices by revoking all user's refresh tokens."""
 
@@ -223,13 +223,13 @@ def logout_all_devices(current_user: Annotated[UserResponse, Depends(get_current
 
     count = auth_service.revoke_all_user_tokens(current_user.user_id)
 
-    return {
-        "message": f"Successfully logged out from all devices",
-        "revoke_tokens": count
-    }
+    return LogoutAllResponse(
+        message="Successfully logged out from all devices",
+        revoked_tokens=count
+    )
 
 
-@router.get("/sessions")
+@router.get("/sessions", response_model=SessionsResponse)
 def get_active_sessions(
     current_user: Annotated[UserResponse, Depends(get_current_active_user)],
     db: Session = Depends(get_db)
@@ -241,22 +241,22 @@ def get_active_sessions(
     sessions = auth_service.jwt_repo.find_active_by_user_id(
         current_user.user_id)
 
-    return {
-        "active_sessions": len(sessions),
-        "sessions": [
-            {
-                "jti": str(session.jti),
-                "device_info": session.device_info,
-                "ip_address": str(session.ip_address) if session.ip_address else None,
-                "created_at": session.created_at,
-                "expires_at": session.expires_at
-            }
+    return SessionsResponse(
+        active_sessions=len(sessions),
+        sessions=[
+            SessionInfo(
+                jti=str(session.jti),
+                device_info=session.device_info,
+                ip_address=str(session.ip_address) if session.ip_address else None,
+                created_at=session.created_at,
+                expires_at=session.expires_at
+            )
             for session in sessions
         ]
-    }
+    )
 
 
-@router.delete("/sessions/{jti}")
+@router.delete("/sessions/{jti}", response_model=MessageResponse)
 def revoke_session(
     jti: str,
     current_user: Annotated[UserResponse, Depends(get_current_active_user)],
@@ -291,10 +291,10 @@ def revoke_session(
             detail="Failed to revoke session"
         )
 
-    return {"message": "Session revoked successfully"}
+    return MessageResponse(message="Session revoked successfully")
 
 
-@router.post("/verify")
+@router.post("/verify", response_model=TokenVerificationResponse)
 def verify_token(
     token: Annotated[str, Depends(oauth2_scheme)],
     db: Session = Depends(get_db)
@@ -310,9 +310,9 @@ def verify_token(
             detail="Invalid or expired token"
         )
 
-    return {
-        "valid": True,
-        "user_id": payload.get("sub"),
-        "email": payload.get("email"),
-        "expires_at": payload.get("exp")
-    }
+    return TokenVerificationResponse(
+        valid=True,
+        user_id=payload.get("sub"),
+        email=payload.get("email"),
+        expires_at=payload.get("exp")
+    )
