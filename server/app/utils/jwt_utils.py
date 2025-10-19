@@ -30,12 +30,15 @@ class JWTValidator:
                 raise InvalidTokenError("Token is not an access token")
             
             return token_payload
-        except jwt.ExpiredSignatureError as e:
-            raise ExpiredTokenError() from e
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired. Please log in again."
+            )
         except jwt.InvalidTokenError as e:
-            raise InvalidTokenError(f"Token verification failed: {str(e)}") from e
+            raise InvalidTokenError(f"Token verification failed: {str(e)}")
         except ValueError as e:  # TokenType enum conversion failed
-            raise InvalidTokenError(f"Invalid token payload: {str(e)}") from e
+            raise InvalidTokenError(f"Invalid token payload: {str(e)}")
 
 
 jwt_validator = JWTValidator()

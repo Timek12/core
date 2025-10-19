@@ -256,58 +256,6 @@ class RedisStateManager:
         except Exception as e:
             logger.error(f"Error clearing sensitive keys: {e}")
     
-    async def create_unseal_session(self, user_id: str, external_token_hash: str, ttl_hours: int = 1):
-        """Create an unseal session for token validation"""
-        try:
-            session_data = {
-                "user_id": user_id,
-                "external_token_hash": external_token_hash,
-                "created_at": datetime.utcnow().isoformat(),
-                "expires_at": (datetime.utcnow() + timedelta(hours=ttl_hours)).isoformat()
-            }
-            
-            encrypted_session = self._encrypt_sensitive_data(json.dumps(session_data))
-            
-            session_key = f"{self.SESSION_PREFIX}unseal:{user_id}"
-            await self.redis_client.setex(
-                session_key,
-                ttl_hours * 3600,
-                encrypted_session
-            )
-            
-            logger.info(f"Unseal session created for user {user_id}")
-            return session_key
-            
-        except Exception as e:
-            logger.error(f"Error creating unseal session: {e}")
-            raise
-
-    async def validate_unseal_session(self, user_id: str, external_token_hash: str) -> bool:
-        """Validate unseal session and token"""
-        try:
-            session_key = f"{self.SESSION_PREFIX}unseal:{user_id}"
-            encrypted_session = await self.redis_client.get(session_key)
-            
-            if not encrypted_session:
-                return False
-            
-            session_data = json.loads(self._decrypt_sensitive_data(encrypted_session))
-            
-            # Validate token hash and expiration
-            if session_data["external_token_hash"] != external_token_hash:
-                return False
-            
-            expires_at = datetime.fromisoformat(session_data["expires_at"])
-            if datetime.utcnow() > expires_at:
-                await self.redis_client.delete(session_key)
-                return False
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error validating unseal session: {e}")
-            return False
-    
     async def get_vault_status(self) -> Dict[str, Any]:
         """Get comprehensive vault status"""
         try:
