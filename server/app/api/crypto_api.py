@@ -7,7 +7,6 @@ from app.utils.jwt_utils import get_current_user, require_role, require_roles, U
 from app.utils.redis_state import get_state_manager
 from dotenv import load_dotenv
 import os
-import hashlib
 import json
 from app.dto.crypto import *
 
@@ -179,7 +178,7 @@ async def seal(current_user: UserInfo = Depends(require_role("admin"))):
 
 
 @router.get("/status", response_model=StatusResponse)
-async def status(current_user: UserInfo = Depends(get_current_user)):
+async def status(_: UserInfo = Depends(get_current_user)):
     """Get vault status from Redis state"""
     
     state_manager = await get_state_manager()
@@ -308,7 +307,7 @@ async def encrypt_secret(req: EncryptRequest, current_user: UserInfo = Depends(r
 
 
 @router.post("/decrypt", response_model=DecryptResponse)
-async def decrypt_secret(req: DecryptRequest, current_user: UserInfo = Depends(require_roles(["admin", "crypto"]))):
+async def decrypt_secret(req: DecryptRequest, _: UserInfo = Depends(require_roles(["admin", "crypto"]))):
     """Decrypt data using stored DEK and Redis session"""
     
     state_manager = await get_state_manager()

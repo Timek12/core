@@ -13,7 +13,6 @@ from app.db.db import create_database_url
 
 Base = declarative_base()
 
-
 class UserRole(str, enum.Enum):
     """User role enumeration"""
     USER = "user"

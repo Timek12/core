@@ -96,7 +96,7 @@ helm install infrastructure ./infrastructure \
 postgresql-security:
   auth:
     username: security_user
-    password: change-this-password # Change in production!
+    password: change-this-password # Change in production
     database: security_db
 ```
 
@@ -105,7 +105,7 @@ postgresql-security:
 ```yaml
 redis:
   auth:
-    password: redis_password # Change in production!
+    password: redis_password # Change in production
 ```
 
 **PgAdmin:**
@@ -114,7 +114,7 @@ redis:
 pgadmin:
   env:
     email: admin@admin.com
-    password: admin_password # Change in production!
+    password: admin_password # Change in production
 ```
 
 #### Core Application Chart
@@ -134,7 +134,7 @@ security:
   image:
     tag: latest # Use specific version in production
   secrets:
-    JWT_SECRET_KEY: your-jwt-secret-key-change-this # Change in production!
+    JWT_SECRET_KEY: your-jwt-secret-key-change-this # Change in production
 ```
 
 **Server Service:**
@@ -155,7 +155,7 @@ storage:
   image:
     tag: latest # Use specific version in production
   secrets:
-    MASTER_KEY: your-master-encryption-key-change-this # Change in production!
+    MASTER_KEY: your-master-encryption-key-change-this # Change in production
 ```
 
 **UI Service:**

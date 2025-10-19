@@ -179,7 +179,7 @@ class RedisStateManager:
             logger.error(f"Error setting vault initialization: {e}")
             raise
     
-    async def store_master_key(self, encrypted_master_key: str, ttl_hours: int = 1):
+    async def store_master_key(self, encrypted_master_key: str, ttl_hours: int = 1): # TODO: Doesn't store master key in redis
         """Store encrypted master key with TTL for security"""
         try:
             key = f"{self.KEY_PREFIX}master"

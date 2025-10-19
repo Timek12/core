@@ -3,6 +3,8 @@ import httpx
 import os
 from typing import Dict, Any, List, Optional
 
+
+# TODO: Add proper error handling, logging and request / response models
 class StorageClient:
     def __init__(self):
         self.base_url = os.getenv("STORAGE_SERVICE_URL", "http://storage:8000")

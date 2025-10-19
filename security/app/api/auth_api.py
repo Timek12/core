@@ -19,7 +19,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 # Dependency to get current user from  access token
 
-
 async def get_current_user(
         token: Annotated[str, Depends(oauth2_scheme)],
         db: Session = Depends(get_db)
@@ -124,7 +123,7 @@ def login_json(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """JSON login endpoint - accepts email/password in request body (SECURE)"""
+    """JSON login endpoint - accepts email/password in request body"""
 
     auth_service = AuthService(db)
 
@@ -200,7 +199,7 @@ def get_current_user_info(current_user: Annotated[UserResponse, Depends(get_curr
 
 
 @router.post("/logout", response_model=MessageResponse)
-def logout(revoke_request: RevokeTokenRequest, current_user: Annotated[UserResponse, Depends(get_current_user)], db: Session = Depends(get_db)):
+def logout(revoke_request: RevokeTokenRequest, _: Annotated[UserResponse, Depends(get_current_user)], db: Session = Depends(get_db)):
     """Logout by revoking refresh token."""
 
     auth_service = AuthService(db)

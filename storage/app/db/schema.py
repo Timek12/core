@@ -21,7 +21,7 @@ class Secrets(Base):
     user_id = Column(Integer, nullable=False)
     name = Column(String(256), nullable=False)
     description = Column(Text, nullable=False)
-    key_id = Column(PGUUID(as_uuid=True), nullable=False)  # Master key reference (for backward compatibility)
+    key_id = Column(PGUUID(as_uuid=True), nullable=False)  # Master key reference (for backward compatibility) # TODO: Check usage
     dek_id = Column(PGUUID(as_uuid=True), nullable=True)  # Data Encryption Key reference
     encrypted_value = Column(Text, nullable=False)
     version = Column(Integer, nullable=False, default=1)

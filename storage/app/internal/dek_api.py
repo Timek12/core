@@ -15,7 +15,7 @@ router = APIRouter(prefix="/internal/deks", tags=["deks"])
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_dek(dek_data: Dict[str, Any], db: Session = Depends(get_db)) -> Dict[str, Any]:
-    """Create a new Data Encryption Key (already encrypted with master key)"""
+    """Create a new Data Encryption Key (already encrypted with KEK)"""
     try:
         service = DEKService(db)
         
@@ -24,6 +24,7 @@ def create_dek(dek_data: Dict[str, Any], db: Session = Depends(get_db)) -> Dict[
             nonce=dek_data["nonce"]
         )
         
+        # TODO: Proper DTO response model
         return {
             "id": str(dek.id),
             "encrypted_dek": dek.encrypted_dek,
@@ -52,6 +53,7 @@ def get_dek(dek_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
                 detail="DEK not found"
             )
         
+        # TODO: Proper DTO response model
         return {
             "id": str(dek.id),
             "encrypted_dek": dek.encrypted_dek,
@@ -82,7 +84,8 @@ def list_active_deks(db: Session = Depends(get_db)):
         service = DEKService(db)
         deks = service.get_all_active_deks()
         
-        return [
+        # TODO: Proper DTO response model
+        return [ 
             {
                 "id": str(dek.id),
                 "version": dek.version,

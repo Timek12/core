@@ -13,7 +13,7 @@ router = APIRouter(prefix="/internal/keys", tags=["keys"])
 def get_key_by_id(
     key_id: int, 
     db: Session = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user)
+    _: UserInfo = Depends(get_current_user)
 ):
     """Get key by ID - requires authentication"""
     service = KeyService(db)
@@ -31,7 +31,7 @@ def get_key_by_id(
 def get_key_by_type(
     key_type: str, 
     db: Session = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user)
+    _: UserInfo = Depends(get_current_user)
 ):
     """Get key by type - requires authentication"""
     service = KeyService(db)
@@ -49,7 +49,7 @@ def get_key_by_type(
 def get_all_active_keys(
     key_type: Optional[str] = Query(None), 
     db: Session = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user)
+    _: UserInfo = Depends(get_current_user)
 ):
     """Get all active keys - requires authentication"""
     service = KeyService(db)
@@ -59,7 +59,7 @@ def get_all_active_keys(
 def create_key(
     key_data: KeyCreate, 
     db: Session = Depends(get_db),
-    current_user: UserInfo = Depends(require_role("admin"))
+    _: UserInfo = Depends(require_role("admin"))
 ):
     """Create key - requires admin role"""
     service = KeyService(db)
@@ -69,7 +69,7 @@ def create_key(
 def deactivate_key(
     key_id: int, 
     db: Session = Depends(get_db),
-    current_user: UserInfo = Depends(require_role("admin"))
+    _: UserInfo = Depends(require_role("admin"))
 ):
     """Deactivate key - requires admin role"""
     service = KeyService(db)

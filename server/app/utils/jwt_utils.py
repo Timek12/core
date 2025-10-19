@@ -8,7 +8,7 @@ from app.dto.token import ExpiredTokenError, InvalidTokenError, TokenAlgorithm, 
         
 class JWTValidator:
     """Handles JWT validation"""
-    def __init__(self, secret_key: Optional[str] = None, algorithm: str = TokenAlgorithm.HS256): # TODO: make algorithms as enums
+    def __init__(self, secret_key: Optional[str] = None, algorithm: str = TokenAlgorithm.HS256):
         self.secret_key = secret_key or os.getenv("JWT_SECRET_KEY")
         self.algorithm = algorithm
         
