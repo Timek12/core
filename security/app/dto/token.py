@@ -74,7 +74,7 @@ class JWTTokenResponse(JWTTokenBase):
 
 
 class JWTTokenPublic(BaseModel):
-    """Public JWT token schema (safe for external use)."""
+    """Public JWT token schema."""
     jti: uuid.UUID
     expires_at: datetime
     revoked: bool
@@ -133,7 +133,7 @@ class RefreshTokenRequest(BaseModel):
 class RefreshTokenResponse(BaseModel):
     """Schema for refresh token response."""
     access_token: str
-    token_type: TokenType = "bearer"
+    token_type: str = "bearer"
     expires_in: int
 
 class RevokeTokenRequest(BaseModel):

@@ -106,11 +106,16 @@ class RedisStateManager:
     async def is_vault_sealed(self) -> bool:
         """Check if vault is sealed"""
         try:
+            master_key = await self.get_master_key()
+            if not master_key:
+                await self.set_vault_sealed(True)
+                return True
+        
             sealed = await self.redis_client.get(f"{self.VAULT_PREFIX}sealed")
             return sealed == "true" if sealed else True  # Default to sealed
         except Exception as e:
             logger.error(f"Error checking vault seal status: {e}")
-            return True  # Fail safe - assume sealed
+            return True
 
     async def set_vault_sealed(self, sealed: bool, user_id: Optional[str] = None):
         """Set vault seal status with audit trail"""
@@ -179,14 +184,14 @@ class RedisStateManager:
             logger.error(f"Error setting vault initialization: {e}")
             raise
     
-    async def store_master_key(self, encrypted_master_key: str, ttl_hours: int = 1): # TODO: Doesn't store master key in redis
+    async def store_master_key(self, master_key_hex: str, ttl_hours: int = 1):
         """Store encrypted master key with TTL for security"""
         try:
             key = f"{self.KEY_PREFIX}master"
-            logger.info(f"Storing master key at Redis key: {key}, input length: {len(encrypted_master_key)}")
+            logger.info(f"Storing master key at Redis key: {key}, input length: {len(master_key_hex)}")
             
             # Double encrypt the master key
-            double_encrypted = self._encrypt_sensitive_data(encrypted_master_key)
+            double_encrypted = self._encrypt_sensitive_data(master_key_hex)
             logger.info(f"Master key encrypted, encrypted length: {len(double_encrypted)}")
             
             # Store with TTL

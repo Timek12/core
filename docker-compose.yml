@@ -65,13 +65,12 @@ services:
   redis-commander:
     image: ghcr.io/joeferner/redis-commander:latest
     container_name: redis-commander
-    user: redis                       # avoid permission errors (see repo notes)
+    user: redis
     environment:
       # UI auth
       HTTP_USER: admin
       HTTP_PASSWORD: ${REDIS_COMM_PASSWORD:-rc_admin_pass}
 
-      # connect to the redis service in this compose network (passworded)
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_pass}

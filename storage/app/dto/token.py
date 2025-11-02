@@ -14,7 +14,7 @@ class ExpiredTokenError(TokenVerificationError):
     pass
 
 class InvalidTokenError(TokenVerificationError):
-    """Token is invalid (tampered, wrong signature, etc.)"""
+    """Token is invalid"""
     pass
 
 class TokenType(str, Enum):

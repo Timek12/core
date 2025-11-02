@@ -8,7 +8,7 @@ from app.dto.token import ExpiredTokenError, InvalidTokenError, TokenAlgorithm, 
         
 class JWTValidator:
     """Handles JWT validation"""
-    def __init__(self, secret_key: Optional[str] = None, algorithm: str = TokenAlgorithm.HS256): # TODO: make algorithms as enums
+    def __init__(self, secret_key: Optional[str] = None, algorithm: str = TokenAlgorithm.HS256):
         self.secret_key = secret_key or os.getenv("JWT_SECRET_KEY")
         self.algorithm = algorithm
         
@@ -34,7 +34,7 @@ class JWTValidator:
             raise ExpiredTokenError() from e
         except jwt.InvalidTokenError as e:
             raise InvalidTokenError(f"Token verification failed: {str(e)}") from e
-        except ValueError as e:  # TokenType enum conversion failed
+        except ValueError as e:
             raise InvalidTokenError(f"Invalid token payload: {str(e)}") from e
 
 

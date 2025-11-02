@@ -130,11 +130,6 @@ class AuthService:
         user_role = user.role.value if hasattr(user.role, 'value') else str(user.role)
         user_roles = [user_role]
         
-        # Debug logging
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"Creating token for user {user.email} with role: {user_role}, roles list: {user_roles}")
-        
         access_token, _ = self.create_access_token(user.user_id, user.email, user_roles)
         refresh_token, _ = self.create_refresh_token(user.user_id, device_info, ip_address)
 
@@ -145,21 +140,29 @@ class AuthService:
             expires_in=self.access_token_expire_minutes * 60 # Convert to seconds
         )
 
-    def verify_access_token(self, token: str) -> Optional[dict]:
+    def verify_access_token(self, token: str) -> Optional[TokenPayload]:
         try:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
 
             # Check token type
-            if payload.get("type") != TokenType.ACCESS:
+            if payload.get("type") != TokenType.ACCESS.value:
                 raise InvalidTokenError("Token is not an access token")
             
             user_id = payload.get("sub")
             if not user_id:
                 raise InvalidTokenError("Token missing subject (user_id)")
+            
+            email = payload.get("email", "")
+            roles = payload.get("roles", ["user"])
 
+            # Map JWT payload to TokenPayload DTO
             return TokenPayload(
                 user_id=user_id,
-                token_type=TokenType.ACCESS
+                email=email,
+                roles=roles,
+                token_type=TokenType.ACCESS,
+                exp=payload.get("exp"),
+                iat=payload.get("iat")
             )
             
         except jwt.ExpiredSignatureError:
@@ -205,28 +208,39 @@ class AuthService:
         
         except jwt.ExpiredSignatureError:
             return None
-        except jwt.jwt.InvalidTokenError:
+        except jwt.InvalidTokenError:
             return None
         except ValueError:
             return None
+        except Exception as e:
+            # Log unexpected errors for debugging
+            print(f"Unexpected error in verify_refresh_token: {e}")
+            return None
         
     def refresh_access_token(self, refresh_token: str) -> Optional[str]:
-        db_token = self.verify_refresh_token(refresh_token)
-        if not db_token:
+        try:
+            db_token = self.verify_refresh_token(refresh_token)
+            if not db_token:
+                return None
+            
+            # Get user
+            user = self.user_repo.find_by_id(db_token.user_id)
+            if not user:
+                return None
+            
+            # Get user role (single role field, convert enum to string)
+            user_role = user.role.value if hasattr(user.role, 'value') else str(user.role)
+            user_roles = [user_role]
+            
+            # Create new access token only (old behavior)
+            access_token, _ = self.create_access_token(user.user_id, user.email, user_roles)
+            return access_token
+        except Exception as e:
+            # Log unexpected errors for debugging
+            print(f"Error in refresh_access_token: {e}")
+            import traceback
+            traceback.print_exc()
             return None
-        
-        # Get user
-        user = self.user_repo.find_by_id(db_token.user_id)
-        if not user:
-            return None
-        
-        # Get user role (single role field, convert enum to string)
-        user_role = user.role.value if hasattr(user.role, 'value') else str(user.role)
-        user_roles = [user_role]
-        
-        # Create new access token only (old behavior)
-        access_token, _ = self.create_access_token(user.user_id, user.email, user_roles)
-        return access_token
     
     def refresh_token_pair(self, refresh_token: str, device_info: Optional[str] = None, ip_address: Optional[str] = None) -> Optional[TokenPair]:
         """Create new token pair and revoke old refresh token"""
@@ -260,7 +274,7 @@ class AuthService:
         if not payload:
             return None
         
-        user_id = payload.get("sub")
+        user_id = payload["user_id"]
         if not user_id:
             return None
         

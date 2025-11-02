@@ -1,6 +1,3 @@
-"""
-Repository for Data Encryption Keys (DEKs)
-"""
 from typing import List, Optional
 import uuid
 from sqlalchemy.orm import Session

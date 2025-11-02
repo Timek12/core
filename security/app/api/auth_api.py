@@ -50,6 +50,18 @@ async def get_current_active_user(
     return current_user
 
 
+async def require_admin(
+    current_user: Annotated[UserResponse, Depends(get_current_user)]
+) -> UserResponse:
+    """Require user to have admin role"""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return current_user
+
+
 def get_client_info(request: Request) -> tuple[str, str]:
     """Extract device info and IP address from request."""
     user_agent = request.headers.get("user-agent", "unknown")
@@ -57,7 +69,6 @@ def get_client_info(request: Request) -> tuple[str, str]:
     return user_agent, ip_address
 
 # Public endpoints
-
 
 @router.post("/register", response_model=LoginResponse, status_code=status.HTTP_201_CREATED)
 def register(
@@ -151,19 +162,31 @@ def refresh_token(refresh_request: RefreshTokenRequest, db: Session = Depends(ge
 
     auth_service = AuthService(db)
 
-    access_token = auth_service.refresh_access_token(
-        refresh_request.refresh_token)
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token"
-        )
+    try:
+        access_token = auth_service.refresh_access_token(
+            refresh_request.refresh_token)
+        if not access_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired refresh token"
+            )
 
-    return RefreshTokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=auth_service.access_token_expire_minutes * 60
-    )
+        return RefreshTokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=auth_service.access_token_expire_minutes * 60
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Log the error and return a proper JSON response
+        print(f"Error in refresh endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error during token refresh: {str(e)}"
+        )
 
 @router.post("/refresh-pair", response_model=TokenPair)
 def refresh_token_pair(refresh_request: RefreshTokenRequest, request: Request, db: Session = Depends(get_db)):
@@ -173,7 +196,7 @@ def refresh_token_pair(refresh_request: RefreshTokenRequest, request: Request, d
     
     # Extract device info
     device_info = request.headers.get("User-Agent", "Unknown")
-    ip_address = request.client.host
+    ip_address = request.client.host if request.client else "Unknown"
 
     token_pair = auth_service.refresh_token_pair(
         refresh_request.refresh_token, 
@@ -311,7 +334,105 @@ def verify_token(
 
     return TokenVerificationResponse(
         valid=True,
-        user_id=payload.get("sub"),
+        user_id=payload.get("user_id"),
         email=payload.get("email"),
         expires_at=payload.get("exp")
     )
+
+
+# Admin-only endpoints
+
+@router.get("/admin/users", response_model=list[UserResponse])
+def list_all_users(
+    current_admin: Annotated[UserResponse, Depends(require_admin)],
+    db: Session = Depends(get_db)
+):
+    """List all users."""
+    auth_service = AuthService(db)
+    users = auth_service.user_repo.find_all()
+    return [UserResponse.from_orm(user) for user in users]
+
+
+@router.get("/admin/users/{user_id}", response_model=UserResponse)
+def get_user_by_id(
+    user_id: int,
+    current_admin: Annotated[UserResponse, Depends(require_admin)],
+    db: Session = Depends(get_db)
+):
+    """Get user by ID."""
+    auth_service = AuthService(db)
+    user = auth_service.user_repo.find_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID {user_id} not found"
+        )
+    return UserResponse.from_orm(user)
+
+
+@router.put("/admin/users/{user_id}", response_model=UserResponse)
+def update_user_role(
+    user_id: int,
+    role_update: dict,
+    current_admin: Annotated[UserResponse, Depends(require_admin)],
+    db: Session = Depends(get_db)
+):
+    """Update user role."""
+    auth_service = AuthService(db)
+    
+    user = auth_service.user_repo.find_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID {user_id} not found"
+        )
+    
+    # Validate role
+    new_role = role_update.get("role")
+    if new_role not in ["user", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role. Must be one of: user or admin"
+        )
+    
+    # Prevent admin from removing their own admin role
+    if user_id == current_admin.user_id and new_role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove your own admin role"
+        )
+    
+    # Update role
+    from app.db.schema import UserRole
+    user.role = UserRole(new_role)
+    updated_user = auth_service.user_repo.save(user)
+    
+    return UserResponse.from_orm(updated_user)
+
+
+@router.delete("/admin/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(
+    user_id: int,
+    current_admin: Annotated[UserResponse, Depends(require_admin)],
+    db: Session = Depends(get_db)
+):
+    """Delete user."""
+    auth_service = AuthService(db)
+    
+    # Prevent admin from deleting themselves
+    if user_id == current_admin.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own account"
+        )
+    
+    user = auth_service.user_repo.find_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID {user_id} not found"
+        )
+    
+    auth_service.user_repo.delete(user)
+
+    return MessageResponse(message=f"User {user_id} deleted successfully")

@@ -4,7 +4,6 @@ import os
 from typing import Dict, Any, List, Optional
 
 
-# TODO: Add proper error handling, logging and request / response models
 class StorageClient:
     def __init__(self):
         self.base_url = os.getenv("STORAGE_SERVICE_URL", "http://storage:8000")
@@ -98,11 +97,11 @@ class StorageClient:
             response.raise_for_status()
             return response.json()
     
-    async def get_key_by_id(self, key_id: int, jwt_token: Optional[str] = None) -> Dict[str, Any]:
+    async def get_key_by_id(self, key_id: uuid.UUID, jwt_token: Optional[str] = None) -> Dict[str, Any]:
         """Get a specific key by ID"""
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{self.base_url}/internal/keys/{key_id}",
+                f"{self.base_url}/internal/keys/{str(key_id)}",
                 headers=self._get_headers(jwt_token)
             )
             response.raise_for_status()
@@ -131,11 +130,11 @@ class StorageClient:
             response.raise_for_status()
             return response.json()
     
-    async def deactivate_key(self, key_id: int, jwt_token: Optional[str] = None) -> Dict[str, Any]:
+    async def deactivate_key(self, key_id: uuid.UUID, jwt_token: Optional[str] = None) -> Dict[str, Any]:
         """Deactivate a key (soft delete)"""
         async with httpx.AsyncClient() as client:
             response = await client.patch(
-                f"{self.base_url}/internal/keys/{key_id}/deactivate",
+                f"{self.base_url}/internal/keys/{str(key_id)}/deactivate",
                 headers=self._get_headers(jwt_token)
             )
             response.raise_for_status()
@@ -181,7 +180,6 @@ class StorageClient:
     async def get_secrets_for_user(self, user_id: str, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all secrets and filter by user_id (client-side filtering)"""
         all_secrets = await self.get_all_secrets(jwt_token)
-        # Convert user_id to int for comparison since DB stores it as integer
         try:
             user_id_int = int(user_id)
             return [secret for secret in all_secrets if secret.get("user_id") == user_id_int]

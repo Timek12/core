@@ -1,6 +1,7 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+import uuid
 
 from app.db.db import get_db
 from app.services.key_service import KeyService
@@ -11,7 +12,7 @@ router = APIRouter(prefix="/internal/keys", tags=["keys"])
 
 @router.get("/{key_id}", response_model=KeyResponse)
 def get_key_by_id(
-    key_id: int, 
+    key_id: uuid.UUID, 
     db: Session = Depends(get_db),
     _: UserInfo = Depends(get_current_user)
 ):
@@ -67,7 +68,7 @@ def create_key(
 
 @router.patch("/{key_id}/deactivate", response_model=KeyResponse)
 def deactivate_key(
-    key_id: int, 
+    key_id: uuid.UUID, 
     db: Session = Depends(get_db),
     _: UserInfo = Depends(require_role("admin"))
 ):

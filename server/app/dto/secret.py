@@ -1,8 +1,8 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 import uuid
 from datetime import datetime
-from .common import BaseEntity, AuditInfo, DataResponse, PaginatedResponse
+from .common import DataResponse, PaginatedResponse
 
 class SecretBase(BaseModel):
     """Base secret schema with validation"""
@@ -13,13 +13,13 @@ class SecretBase(BaseModel):
     version: int = Field(default=1, ge=1, description="Secret version for rotation")
     tags: Optional[List[str]] = Field(default=[], description="Tags for categorization")
     
-    @validator('name')
+    @field_validator('name')
     def validate_name(cls, v):
         if not v.strip():
             raise ValueError('Name cannot be empty or whitespace only')
         return v.strip()
     
-    @validator('tags')
+    @field_validator('tags')
     def validate_tags(cls, v):
         if v is None:
             return []
@@ -36,7 +36,7 @@ class SecretCreateRequest(BaseModel):
     value: str = Field(..., min_length=1, description="Secret value (will be encrypted)")
     description: Optional[str] = Field("", max_length=1000, description="Secret description")
     
-    @validator('name')
+    @field_validator('name')
     def validate_name(cls, v):
         if not v.strip():
             raise ValueError('Name cannot be empty or whitespace only')
@@ -48,7 +48,7 @@ class SecretUpdateRequest(BaseModel):
     value: Optional[str] = Field(None, min_length=1, description="Secret value (will be encrypted)")
     description: Optional[str] = Field(None, max_length=1000, description="Secret description")
     
-    @validator('name')
+    @field_validator('name')
     def validate_name(cls, v):
         if v is not None and not v.strip():
             raise ValueError('Name cannot be empty or whitespace only')
@@ -64,13 +64,13 @@ class SecretUpdate(BaseModel):
     version: Optional[int] = Field(None, ge=1, description="Secret version")
     tags: Optional[List[str]] = Field(None, description="Tags for categorization")
     
-    @validator('name')
+    @field_validator('name')
     def validate_name(cls, v):
         if v is not None and not v.strip():
             raise ValueError('Name cannot be empty or whitespace only')
         return v.strip() if v else v
     
-    @validator('tags')
+    @field_validator('tags')
     def validate_tags(cls, v):
         if v is None:
             return None

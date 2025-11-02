@@ -1,6 +1,3 @@
-"""
-Service for Data Encryption Key (DEK) operations
-"""
 from typing import Optional
 import uuid
 from sqlalchemy.orm import Session
@@ -17,16 +14,7 @@ class DEKService:
         self.repository = DEKRepository(db)
 
     def create_dek(self, encrypted_dek: str, nonce: str) -> DataEncryptionKeys:
-        """
-        Create a new DEK (already encrypted with KEK)
-        
-        Args:
-            encrypted_dek: The DEK encrypted with the KEK (hex string)
-            nonce: The nonce used for encryption (hex string)
-        
-        Returns:
-            The created DEK record
-        """
+        """Create a new DEK (already encrypted with KEK)"""
         dek = DataEncryptionKeys(
             id=uuid.uuid4(),
             encrypted_dek=encrypted_dek,

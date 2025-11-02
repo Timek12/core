@@ -95,13 +95,13 @@ def seed_initial_users(session: Session) -> bool:
             created_count += 1
             
             role_name = user_data["role"].value.capitalize()
-            logger.info(f"  ✓ Created {role_name}: {user_data['email']}")
+            logger.info(f"  Created {role_name}: {user_data['email']}")
         
         # Commit all users
         session.commit()
         
-        logger.info(f"✅ Successfully seeded {created_count} initial users")
-        logger.info("📋 Login credentials:")
+        logger.info(f"Successfully seeded {created_count} initial users")
+        logger.info("   Login credentials:")
         logger.info("   Regular users: user1@example.com, user2@example.com, user3@example.com")
         logger.info("   Password: User123@")
         logger.info("   Admin: admin@luna.com")
@@ -110,6 +110,6 @@ def seed_initial_users(session: Session) -> bool:
         return True
         
     except Exception as e:
-        logger.error(f"❌ Error seeding users: {e}", exc_info=True)
+        logger.error(f"Error seeding users: {e}", exc_info=True)
         session.rollback()
         return False

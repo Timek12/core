@@ -33,6 +33,7 @@ class SecretService:
             name=secret_data.name, 
             description=secret_data.description,
             key_id=secret_data.key_id,
+            dek_id=secret_data.dek_id,
             encrypted_value=secret_data.encrypted_value,
             version=secret_data.version,
             created_at=datetime.now(timezone.utc),
@@ -47,13 +48,13 @@ class SecretService:
         if not secret:
             return None
         
-        # Use dict() for Pydantic v1 compatibility
         update_dict = dict(secret_data)
         for field, value in update_dict.items():
             if value is not None:
                 setattr(secret, field, value)
 
         secret.updated_at = datetime.now(timezone.utc)
+        secret.version += 1
 
         updated_secret = self.repository.update(secret)
         return SecretResponse.from_orm(updated_secret)

@@ -11,7 +11,7 @@ router = APIRouter(prefix="/internal/status", tags=["status"])
 @router.get("", response_model=ServerStatusResponse)
 def get_server_status(
     db: Session = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user)
+    _: UserInfo = Depends(get_current_user)
 ):
     """Get server status - requires authentication"""
     service = ServerStatusService(db)
@@ -29,7 +29,7 @@ def get_server_status(
 def update_server_status(
     status_data: ServerStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: UserInfo = Depends(require_role("admin"))
+    _: UserInfo = Depends(require_role("admin"))
 ):
     """Update server status - requires admin role"""
     service = ServerStatusService(db)

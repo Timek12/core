@@ -17,7 +17,6 @@ class UserRole(str, enum.Enum):
     """User role enumeration"""
     USER = "user"
     ADMIN = "admin"
-    MODERATOR = "moderator"
 
 class Users(Base):
     """Users table for authentication (used by security service)"""
@@ -29,7 +28,7 @@ class Users(Base):
     name = Column(String(255), nullable=True)
     avatar_url = Column(Text, nullable=True)
     auth_method = Column(String(50), nullable=False, default='oauth')
-    provider = Column(String(50), nullable=False, default='github')
+    provider = Column(String(50), nullable=False, default='local')
     password_hash = Column(String(255), nullable=True)
     email_verified = Column(Boolean, default=False)
     role = Column(Enum(UserRole, name='user_role', native_enum=False), default=UserRole.USER, nullable=False)

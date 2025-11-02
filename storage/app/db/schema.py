@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 import uuid
 from sqlalchemy import (
-    create_engine, Column, Integer, String, Text, Boolean,
+    create_engine, Column, Integer, String, Text, Boolean, DateTime,
     TIMESTAMP, Index, inspect
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -25,6 +25,7 @@ class Secrets(Base):
     dek_id = Column(PGUUID(as_uuid=True), nullable=True)  # Data Encryption Key reference
     encrypted_value = Column(Text, nullable=False)
     version = Column(Integer, nullable=False, default=1)
+    is_active = Column(Boolean, nullable=False, default=True)  # Active/inactive status
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     
@@ -33,20 +34,21 @@ class Secrets(Base):
         Index('idx_secrets_key_id', 'key_id'),
         Index('idx_secrets_dek_id', 'dek_id'),
         Index('idx_secrets_user_id', 'user_id'),
+        Index('idx_secrets_is_active', 'is_active'),
     )
 
-class Keys(Base):
-    """Keys table (for encryption key management)"""
-    __tablename__ = 'keys'
+class EncryptionKeys(Base):
+    __tablename__ = "encryption_keys"
     
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    key_type = Column(String(16), nullable=False)
-    encrypted_key = Column(Text, nullable=False)  
-    nonce = Column(Text, nullable=False) 
-    version = Column(Integer, nullable=False, default=1)
-    active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
-    meta = Column(String, nullable=True)
+    id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    key_type = Column(String(50), nullable=False)  # 'root', 'master', 'dek'
+    encrypted_key = Column(Text, nullable=False)
+    nonce = Column(String(255), nullable=False)
+    version = Column(Integer, default=1)
+    status = Column(String(20), default='active')  # 'active', 'rotated', 'deactivated'
+    meta = Column(Text)  # JSON string for additional metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class DataEncryptionKeys(Base):
     """Data Encryption Keys table (DEKs encrypted with master key)"""

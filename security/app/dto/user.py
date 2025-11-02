@@ -45,7 +45,7 @@ class UserResponse(UserBase):
     user_id: int
     provider_user_id: Optional[str] = None
     email_verified: bool
-    role: str = Field(..., description="User role: user, admin, or moderator")
+    role: str = Field(..., description="User role: user or admin")
     created_at: datetime
     updated_at: datetime
     
@@ -60,7 +60,7 @@ class UserPublic(BaseModel):
     name: Optional[str] = None
     avatar_url: Optional[str] = None
     provider: str
-    role: str = Field(..., description="User role: user, admin, or moderator")
+    role: str = Field(..., description="User role: user or admin")
     
     class Config:
         from_attributes = True
