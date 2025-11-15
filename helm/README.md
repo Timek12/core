@@ -124,7 +124,7 @@ pgadmin:
 ```yaml
 global:
   imageRegistry: ghcr.io
-  imageOrganization: lunaguard # Change to your organization
+  imageOrganization: luna # Change to your organization
 ```
 
 **Security Service:**

@@ -43,6 +43,14 @@ def seed_initial_users(session: Session) -> bool:
         # Define initial users
         initial_users = [
             {
+                "email": "user@gmail.com",
+                "password": "User123@",
+                "name": "Regular User",
+                "role": UserRole.USER,
+                "auth_method": "local",
+                "provider": "local"
+            },
+            {
                 "email": "user1@example.com",
                 "password": "User123@",
                 "name": "User One",
@@ -67,9 +75,25 @@ def seed_initial_users(session: Session) -> bool:
                 "provider": "local"
             },
             {
+                "email": "user4@example.com",
+                "password": "User123@",
+                "name": "User Four",
+                "role": UserRole.USER,
+                "auth_method": "local",
+                "provider": "local"
+            },
+            {
                 "email": "admin@luna.com",
                 "password": "Admin123@",
                 "name": "Admin User",
+                "role": UserRole.ADMIN,
+                "auth_method": "local",
+                "provider": "local"
+            },
+            {
+                "email": "admin2@luna.com",
+                "password": "Admin123@",
+                "name": "Admin Two",
                 "role": UserRole.ADMIN,
                 "auth_method": "local",
                 "provider": "local"
@@ -102,9 +126,9 @@ def seed_initial_users(session: Session) -> bool:
         
         logger.info(f"Successfully seeded {created_count} initial users")
         logger.info("   Login credentials:")
-        logger.info("   Regular users: user1@example.com, user2@example.com, user3@example.com")
+        logger.info("   Regular users: user@gmail.com, user1-4@example.com")
         logger.info("   Password: User123@")
-        logger.info("   Admin: admin@luna.com")
+        logger.info("   Admins: admin@luna.com, admin2@luna.com")
         logger.info("   Password: Admin123@")
         
         return True

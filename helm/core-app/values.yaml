@@ -2,7 +2,7 @@
 global:
   imagePullPolicy: IfNotPresent
   imageRegistry: ghcr.io
-  imageOrganization: lunaguard
+  imageOrganization: luna
 
 # Security Service
 security:
