@@ -4,16 +4,29 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Callable
 import os
 
-from app.dto.token import ExpiredTokenError, InvalidTokenError, TokenAlgorithm, TokenError, TokenPayload, TokenType, UserInfo, UserRole
+from app.dto.token import (
+    ExpiredTokenError,
+    InvalidTokenError,
+    TokenAlgorithm,
+    TokenError,
+    TokenPayload,
+    TokenType,
+    UserInfo,
+    UserRole,
+)
         
 class JWTValidator:
     """Handles JWT validation"""
     def __init__(self, secret_key: Optional[str] = None, algorithm: str = TokenAlgorithm.HS256):
         self.secret_key = secret_key or os.getenv("JWT_SECRET_KEY")
+        if not self.secret_key:
+            raise ValueError("JWT_SECRET_KEY must be set")
         self.algorithm = algorithm
         
     def verify_token(self, token: str) -> TokenPayload:
         """Verify JWT token and return typed payload"""
+        if not self.secret_key:
+             raise ValueError("JWT_SECRET_KEY must be set")
         try:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
             

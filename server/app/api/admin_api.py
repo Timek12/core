@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from typing import List, Optional
 import httpx
 import logging
-import os
 
 from app.utils.jwt_utils import get_admin_user
 from app.dto.token import UserInfo
+from app.clients.storage_client import StorageClient
 
 logger = logging.getLogger(__name__)
 
@@ -19,79 +20,86 @@ def get_token_from_request(request: Request) -> str:
     return ""
 
 
-@router.get("/secrets")
-async def get_all_secrets(
+@router.get("/data")
+async def get_all_data(
     request: Request,
+    data_type: Optional[str] = None,
     _: UserInfo = Depends(get_admin_user)
 ):
-    """Get all secrets across all users"""
+    """Get all data across all users with optional type filtering"""
     try:
         token = get_token_from_request(request)
-        storage_url = os.getenv("STORAGE_SERVICE_URL", "http://storage:8002")
+        storage_client = StorageClient()
         
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{storage_url}/internal/secrets/admin/all",
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            response.raise_for_status()
-            return response.json()
+        # Use admin endpoint to get all data
+        data_list = await storage_client.get_all_data_admin(data_type, token)
+        
+        return data_list
     except httpx.HTTPStatusError as e:
         logger.error(f"Storage service error: {e.response.text}")
-        raise HTTPException(status_code=e.response.status_code, detail="Storage service error")
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
     except Exception as e:
-        logger.error(f"Failed to get all secrets: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error getting all data: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
 
-@router.get("/secrets/user/{user_id}")
-async def get_user_secrets(
+@router.get("/data/user/{user_id}")
+async def get_user_data(
     user_id: int,
     request: Request,
+    data_type: Optional[str] = None,
     _: UserInfo = Depends(get_admin_user)
 ):
-    """Get all secrets for a specific user"""
+    """Get all data for a specific user with optional type filtering"""
     try:
         token = get_token_from_request(request)
-        storage_url = os.getenv("STORAGE_SERVICE_URL", "http://storage:8002")
+        storage_client = StorageClient()
         
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{storage_url}/internal/secrets/admin/user/{user_id}",
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            response.raise_for_status()
-            return response.json()
+        data_list = await storage_client.get_data_for_user(str(user_id), data_type, token)
+        
+        return {"data": data_list, "user_id": user_id}
     except httpx.HTTPStatusError as e:
         logger.error(f"Storage service error: {e.response.text}")
-        raise HTTPException(status_code=e.response.status_code, detail="Storage service error")
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
     except Exception as e:
-        logger.error(f"Failed to get user secrets: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error getting user data: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
 
-@router.delete("/secrets/{secret_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_any_secret(
-    secret_id: str,
+@router.delete("/data/{data_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_any_data(
+    data_id: str,
     request: Request,
     _: UserInfo = Depends(get_admin_user)
 ):
-    """Delete any user's secret"""
+    """Delete any user's data (admin only)"""
     try:
         token = get_token_from_request(request)
-        storage_url = os.getenv("STORAGE_SERVICE_URL", "http://storage:8002")
+        storage_client = StorageClient()
         
-        async with httpx.AsyncClient() as client:
-            response = await client.delete(
-                f"{storage_url}/internal/secrets/admin/{secret_id}",
-                headers={"Authorization": f"Bearer {token}"}
+        success = await storage_client.delete_data_admin(data_id, token)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Data not found"
             )
-            response.raise_for_status()
+        
+        return None
     except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Secret not found")
         logger.error(f"Storage service error: {e.response.text}")
-        raise HTTPException(status_code=e.response.status_code, detail="Storage service error")
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to delete secret: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error deleting data: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )

@@ -1,3 +1,23 @@
+﻿from __future__ import annotations
+
+import base64
+import json
+import os
+import secrets
+from datetime import datetime
+from typing import Any, Dict, Optional, Tuple
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+import logging
+
+from app.clients.storage_client import StorageClient
+from app.utils.redis_state import RedisStateManager
+
+logger = logging.getLogger(__name__)
+
+
 import uuid
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
@@ -14,9 +34,15 @@ from app.utils.redis_state import RedisStateManager
 logger = logging.getLogger(__name__)
 
 class CryptoService:
-    def __init__(self, storage_client: StorageClient = None, state_manager: RedisStateManager = None):
+    def __init__(self, storage_client: Optional[StorageClient] = None, state_manager: Optional[RedisStateManager] = None):
         self.storage_client = storage_client or StorageClient()
         self.state_manager = state_manager
+
+    def _ensure_state_manager(self) -> RedisStateManager:
+        """Ensure state manager is available"""
+        if not self.state_manager:
+            raise ValueError("RedisStateManager is required for this operation")
+        return self.state_manager
 
     @staticmethod
     def hkdf_derive(key: bytes, salt: bytes, info: bytes = b"123456789", length: int = 32) -> bytes:
@@ -52,7 +78,8 @@ class CryptoService:
         logger.info(f"Initializing vault for user {user_id}")
         
         # Check if already initialized
-        if await self.state_manager.is_vault_initialized():
+        state_manager = self._ensure_state_manager()
+        if await state_manager.is_vault_initialized():
             raise ValueError("Vault already initialized")
 
         # Step 1 & 2: Generate keys
@@ -92,7 +119,7 @@ class CryptoService:
         master_response = await self.storage_client.create_key(master_key_data, jwt_token)
 
         # Step 7: Store root key metadata in Redis
-        await self.state_manager.store_root_key_info({
+        await state_manager.store_root_key_info({
             "storage_id": root_response['id'],
             "salt": salt.hex(),
             "created_by": user_id,
@@ -100,8 +127,8 @@ class CryptoService:
         })
 
         # Mark vault as initialized and sealed
-        await self.state_manager.set_vault_initialized(user_id)
-        await self.state_manager.set_vault_sealed(True, user_id)
+        await state_manager.set_vault_initialized(user_id)
+        await state_manager.set_vault_sealed(True, user_id)
 
         # Clear sensitive data from memory
         del root_key, master_key, kek
@@ -130,11 +157,12 @@ class CryptoService:
         logger.info(f"Unsealing vault for user {user_id}")
         
         # Check if initialized
-        if not await self.state_manager.is_vault_initialized():
+        state_manager = self._ensure_state_manager()
+        if not await state_manager.is_vault_initialized():
             raise ValueError("Vault not initialized")
 
         # Step 1: Get root key info from Redis
-        root_key_info = await self.state_manager.get_root_key_info()
+        root_key_info = await state_manager.get_root_key_info()
         if not root_key_info:
             raise ValueError("Root key metadata not found")
 
@@ -176,10 +204,10 @@ class CryptoService:
             raise ValueError("Master key decryption failed")
 
         # Step 7: Store decrypted master key in Redis with TTL
-        await self.state_manager.store_master_key(master_key.hex(), ttl_hours=1)
+        await state_manager.store_master_key(master_key.hex(), ttl_hours=1)
 
         # Step 8: Mark vault as unsealed
-        await self.state_manager.set_vault_sealed(False, user_id)
+        await state_manager.set_vault_sealed(False, user_id)
 
         # Clear sensitive data from memory
         del root_key, master_key, kek
@@ -200,27 +228,77 @@ class CryptoService:
         logger.info(f"Sealing vault for user {user_id}")
         
         # Clear sensitive keys
-        await self.state_manager.clear_sensitive_keys()
+        state_manager = self._ensure_state_manager()
+        await state_manager.clear_sensitive_keys()
         
         # Mark vault as sealed
-        await self.state_manager.set_vault_sealed(True, user_id)
+        await state_manager.set_vault_sealed(True, user_id)
 
         logger.info("Vault sealed successfully")
         
         return {
             "sealed": True,
-            "initialized": await self.state_manager.is_vault_initialized()
+            "initialized": await state_manager.is_vault_initialized()
         }
 
     async def get_vault_status(self) -> Dict:
         """
         Get current vault status from Redis
         """
-        is_initialized = await self.state_manager.is_vault_initialized()
-        is_sealed = await self.state_manager.is_vault_sealed()
+        state_manager = self._ensure_state_manager()
+        is_initialized = await state_manager.is_vault_initialized()
+        is_sealed = await state_manager.is_vault_sealed()
         
         return {
             "sealed": is_sealed,
             "initialized": is_initialized,
             "version": "1.0"
         }
+
+    async def encrypt_json_payload(self, payload: Dict[str, Any], jwt_token: str) -> Tuple[str, str]:
+        """Encrypt a JSON payload and return the ciphertext plus DEK id."""
+        state_manager = self._ensure_state_manager()
+
+        master_key_hex = await state_manager.get_master_key()
+        if not master_key_hex:
+            raise ValueError("Vault is sealed - master key not available")
+
+        master_key = bytes.fromhex(master_key_hex)
+        plaintext = json.dumps(payload).encode("utf-8")
+
+        dek = secrets.token_bytes(32)
+        nonce, ciphertext = self.aesgcm_encrypt(dek, plaintext)
+        dek_nonce, encrypted_dek = self.aesgcm_encrypt(master_key, dek)
+
+        dek_payload = {
+            "encrypted_dek": base64.b64encode(encrypted_dek).decode("utf-8"),
+            "nonce": base64.b64encode(dek_nonce).decode("utf-8"),
+        }
+        dek_response = await self.storage_client.create_dek(dek_payload, jwt_token)
+        dek_id = dek_response["id"]
+
+        encrypted_value = base64.b64encode(nonce + ciphertext).decode("utf-8")
+        return encrypted_value, dek_id
+
+    async def decrypt_json_payload(self, encrypted_value: str, dek_id: str) -> Dict[str, Any]:
+        """Decrypt stored data payload."""
+        state_manager = self._ensure_state_manager()
+
+        master_key_hex = await state_manager.get_master_key()
+        if not master_key_hex:
+            raise ValueError("Vault is sealed - master key not available")
+
+        master_key = bytes.fromhex(master_key_hex)
+
+        dek_response = await self.storage_client.get_dek(dek_id)
+        encrypted_dek = base64.b64decode(dek_response["encrypted_dek"])
+        dek_nonce = base64.b64decode(dek_response["nonce"])
+
+        dek = self.aesgcm_decrypt(master_key, dek_nonce, encrypted_dek)
+
+        encrypted_bytes = base64.b64decode(encrypted_value)
+        nonce = encrypted_bytes[:12]
+        ciphertext = encrypted_bytes[12:]
+
+        plaintext = self.aesgcm_decrypt(dek, nonce, ciphertext)
+        return json.loads(plaintext.decode("utf-8"))

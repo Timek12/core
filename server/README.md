@@ -5,10 +5,10 @@ API gateway and business logic layer. Orchestrates communication between UI, Sec
 ## What It Does
 
 - Vault initialization & unsealing
-- Secret encryption/decryption (AES-GCM + DEK)
+- Data encryption/decryption (AES-GCM + DEK)
 - Master key management in Redis
 - Crypto operations (key derivation, encryption)
-- Admin endpoints for managing all secrets
+- Admin endpoints for managing all data
 
 ## Dependencies
 
@@ -22,12 +22,12 @@ API gateway and business logic layer. Orchestrates communication between UI, Sec
 
 1. Root Key (from external token) → decrypts Master Key
 2. Master Key (cached in Redis) → decrypts DEKs
-3. DEK (per secret) → encrypts actual secret value
+3. DEK (per data item) → encrypts actual data value
 
 **Vault States:**
 
-- `sealed` - Master key not in memory, secrets inaccessible
-- `unsealed` - Master key cached, secrets can be encrypted/decrypted
+- `sealed` - Master key not in memory, data inaccessible
+- `unsealed` - Master key cached, data can be encrypted/decrypted
 
 ## Endpoints
 
@@ -38,16 +38,16 @@ API gateway and business logic layer. Orchestrates communication between UI, Sec
 - `POST /api/vault/seal` - Clear master key from cache
 - `GET /api/vault/status` - Check vault state
 
-**Secrets (User):**
+**Data (User):**
 
-- `GET /api/secrets` - List my secrets
-- `POST /api/secrets` - Create new secret
-- `PUT /api/secrets/{id}` - Update secret
-- `DELETE /api/secrets/{id}` - Delete secret
+- `GET /api/data` - List my data
+- `POST /api/data` - Create new data
+- `PUT /api/data/{id}` - Update data
+- `DELETE /api/data/{id}` - Delete data
 
 **Admin:**
 
-- `GET /api/admin/secrets` - View all users' secrets
+- `GET /api/admin/data` - View all users' data
 - `GET /api/admin/secrets/user/{id}` - Secrets for specific user
 - `DELETE /api/admin/secrets/{id}` - Delete any secret
 

@@ -1,10 +1,10 @@
 # Storage Service
 
-Internal data persistence layer. Stores encrypted secrets, DEKs, and encryption keys.
+Internal data persistence layer. Stores encrypted data, DEKs, and encryption keys.
 
 ## What It Does
 
-- Stores encrypted secrets in PostgreSQL
+- Stores encrypted data in PostgreSQL
 - Manages Data Encryption Keys (DEKs)
 - Stores Master Key encryption metadata
 - Validates JWT tokens for internal requests
@@ -14,8 +14,8 @@ Internal data persistence layer. Stores encrypted secrets, DEKs, and encryption 
 
 PostgreSQL with tables:
 
-- `secrets` - Encrypted secret values + metadata
-- `data_encryption_keys` - Encrypted DEKs (one per secret)
+- `data` - Encrypted data values + metadata
+- `data_encryption_keys` - Encrypted DEKs (one per data item)
 - `encryption_keys` - Master/Root key metadata
 - `server_status` - Vault initialization state
 
@@ -23,18 +23,18 @@ PostgreSQL with tables:
 
 **All endpoints require JWT authentication.**
 
-**Secrets (Internal):**
+**Data (Internal):**
 
-- `GET /internal/secrets` - Get secrets for authenticated user
-- `POST /internal/secrets` - Create secret
-- `PUT /internal/secrets?secret_id={id}` - Update secret
-- `DELETE /internal/secrets/{id}` - Delete secret (with ownership check)
+- `GET /internal/data` - Get data for authenticated user
+- `POST /internal/data` - Create data
+- `PUT /internal/data?data_id={id}` - Update data
+- `DELETE /internal/data/{id}` - Delete data (with ownership check)
 
-**Admin Secrets:**
+**Admin Data:**
 
-- `GET /internal/secrets/admin/all` - All secrets (admin only)
-- `GET /internal/secrets/admin/user/{id}` - User's secrets (admin only)
-- `DELETE /internal/secrets/admin/{id}` - Delete any secret (admin only)
+- `GET /internal/data/admin/all` - All data (admin only)
+- `GET /internal/data/admin/user/{id}` - User's data (admin only)
+- `DELETE /internal/data/admin/{id}` - Delete any data (admin only)
 
 **DEK Management:**
 

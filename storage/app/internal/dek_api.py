@@ -5,6 +5,7 @@ from typing import Dict, Any
 
 from app.db.db import get_db
 from app.services.dek_service import DEKService
+from app.utils.dek_helpers import format_dek_response
 
 
 router = APIRouter(prefix="/internal/deks", tags=["deks"])
@@ -21,15 +22,7 @@ def create_dek(dek_data: Dict[str, Any], db: Session = Depends(get_db)) -> Dict[
             nonce=dek_data["nonce"]
         )
         
-        # TODO: Proper DTO response model
-        return {
-            "id": str(dek.id),
-            "encrypted_dek": dek.encrypted_dek,
-            "nonce": dek.nonce,
-            "version": dek.version,
-            "is_active": dek.is_active,
-            "created_at": dek.created_at.isoformat()
-        }
+        return format_dek_response(dek)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -50,16 +43,7 @@ def get_dek(dek_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
                 detail="DEK not found"
             )
         
-        # TODO: Proper DTO response model
-        return {
-            "id": str(dek.id),
-            "encrypted_dek": dek.encrypted_dek,
-            "nonce": dek.nonce,
-            "version": dek.version,
-            "is_active": dek.is_active,
-            "created_at": dek.created_at.isoformat(),
-            "rotated_at": dek.rotated_at.isoformat() if dek.rotated_at else None
-        }
+        return format_dek_response(dek)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -81,16 +65,7 @@ def list_active_deks(db: Session = Depends(get_db)):
         service = DEKService(db)
         deks = service.get_all_active_deks()
         
-        # TODO: Proper DTO response model
-        return [ 
-            {
-                "id": str(dek.id),
-                "version": dek.version,
-                "is_active": dek.is_active,
-                "created_at": dek.created_at.isoformat()
-            }
-            for dek in deks
-        ]
+        return [format_dek_response(dek, include_encrypted=False) for dek in deks]
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

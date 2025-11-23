@@ -14,7 +14,7 @@ from sqlalchemy import text
 sys.path.append('/app')  # Add the app directory to Python path for Docker
 
 from app.db.schema import provision_schema
-from app.internal import secret_api, key_api, status_api, dek_api
+from app.internal import data_api, key_api, status_api, dek_api
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -56,7 +56,7 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(secret_api.router)
+app.include_router(data_api.router)
 app.include_router(key_api.router)
 app.include_router(status_api.router)
 app.include_router(dek_api.router)

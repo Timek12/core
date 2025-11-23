@@ -3,8 +3,14 @@ from app.services.crypto_service import CryptoService
 from app.clients.storage_client import StorageClient
 from app.utils.jwt_utils import get_current_user, require_role, UserInfo, get_token
 from app.utils.redis_state import get_state_manager
-from app.dto.crypto import *
+from app.dto.crypto import (
+    InitRequest, 
+    UnsealRequest, 
+    StatusResponse, 
+    VaultStatus
+)
 import logging
+# from app.dto.server_status import StatusResponse, VaultStatus
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +111,8 @@ async def status(_: UserInfo = Depends(get_current_user)):
     """Get vault status from Redis state"""
     try:
         state_manager = await get_state_manager()
-        crypto_service = CryptoService(state_manager=state_manager)
+        storage_client = StorageClient()
+        crypto_service = CryptoService(storage_client=storage_client, state_manager=state_manager)
         
         result = await crypto_service.get_vault_status()
         

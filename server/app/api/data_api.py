@@ -1,0 +1,154 @@
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from typing import List, Optional
+import logging
+
+from app.dto.data import DataCreateRequest, DataUpdateRequest, DataResponse, DataListItem
+from app.services.data_service import DataService
+from app.services.crypto_service import CryptoService
+from app.clients.storage_client import StorageClient
+from app.utils.jwt_utils import get_current_user
+from app.utils.redis_state import get_state_manager
+from app.dto.token import UserInfo
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/data", tags=["data"])
+
+
+def get_token_from_request(request: Request) -> str:
+    """Extract JWT token from request headers"""
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header[7:]
+    return ""
+
+
+@router.get("", response_model=List[DataListItem])
+async def get_data(
+    request: Request,
+    data_type: Optional[str] = Query(None, description="Filter by data type"),
+    user_info: UserInfo = Depends(get_current_user)
+):
+    """Get all data for authenticated user"""
+    try:
+        token = get_token_from_request(request)
+        state_manager = await get_state_manager()
+        storage_client = StorageClient()
+        data_service = DataService(storage_client, state_manager)
+        
+        return await data_service.get_data_for_user(user_info.user_id, token, data_type)
+    except Exception as e:
+        logger.error(f"Error getting data: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@router.get("/{data_id}", response_model=DataResponse)
+async def get_data_item(
+    data_id: str,
+    request: Request,
+    _: UserInfo = Depends(get_current_user)
+):
+    """Get a specific data item by ID with decryption"""
+    try:
+        token = get_token_from_request(request)
+        state_manager = await get_state_manager()
+        storage_client = StorageClient()
+        data_service = DataService(storage_client, state_manager)
+        
+        return await data_service.get_data(data_id, token)
+    except Exception as e:
+        logger.error(f"Error getting data {data_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Data not found"
+        )
+
+
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=DataResponse)
+async def create_data(
+    data: DataCreateRequest,
+    request: Request,
+    _: UserInfo = Depends(get_current_user)
+):
+    """Create a new typed data"""
+    try:
+        token = get_token_from_request(request)
+        state_manager = await get_state_manager()
+        storage_client = StorageClient()
+        data_service = DataService(storage_client, state_manager)
+        
+        return await data_service.create_data(data, token)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error creating data: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@router.put("/{data_id}", response_model=DataResponse)
+async def update_data(
+    data_id: str,
+    data: DataUpdateRequest,
+    request: Request,
+    _: UserInfo = Depends(get_current_user)
+):
+    """Update an existing data"""
+    try:
+        token = get_token_from_request(request)
+        state_manager = await get_state_manager()
+        storage_client = StorageClient()
+        data_service = DataService(storage_client, state_manager)
+        
+        return await data_service.update_data(data_id, data, token)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error updating data {data_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Data not found"
+        )
+
+
+@router.delete("/{data_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_data(
+    data_id: str,
+    request: Request,
+    _: UserInfo = Depends(get_current_user)
+):
+    """Delete a data"""
+    try:
+        token = get_token_from_request(request)
+        state_manager = await get_state_manager()
+        storage_client = StorageClient()
+        data_service = DataService(storage_client, state_manager)
+        
+        success = await data_service.delete_data(data_id, token)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Data not found"
+            )
+        
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting data {data_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )

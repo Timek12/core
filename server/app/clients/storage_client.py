@@ -8,7 +8,9 @@ class StorageClient:
     def __init__(self):
         self.base_url = os.getenv("STORAGE_SERVICE_URL", "http://storage:8000")
         self.internal_token = os.getenv("INTERNAL_SERVICE_TOKEN")
-        self.headers = {"X-Internal-Token": self.internal_token}
+        self.headers: Dict[str, str] = {}
+        if self.internal_token:
+            self.headers["X-Internal-Token"] = self.internal_token
     
     def _get_headers(self, jwt_token: Optional[str] = None) -> Dict[str, str]:
         """Get headers with optional JWT token"""
@@ -27,58 +29,59 @@ class StorageClient:
                 converted[key] = value
         return converted
         
-    async def get_all_secrets(self, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get all secrets from storage"""
+    async def get_all_data(self, data_type: Optional[str] = None, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get all data from storage, optionally filtered by type"""
+        params = {"data_type": data_type} if data_type else {}
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{self.base_url}/internal/secrets",
-                headers=self._get_headers(jwt_token)
+                f"{self.base_url}/internal/data",
+                headers=self._get_headers(jwt_token),
+                params=params
             )
             response.raise_for_status()
             return response.json()
     
-    async def get_secret(self, secret_id: str, jwt_token: Optional[str] = None) -> Dict[str, Any]:
-        """Get a specific secret by ID"""
+    async def get_data(self, data_id: str, jwt_token: Optional[str] = None) -> Dict[str, Any]:
+        """Get a specific data by ID"""
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{self.base_url}/internal/secrets/{secret_id}",
+                f"{self.base_url}/internal/data/{data_id}",
                 headers=self._get_headers(jwt_token)
             )
             response.raise_for_status()
             return response.json()
         
-    async def create_secret(self, secret_data: Dict[str, Any], jwt_token: Optional[str] = None) -> Dict[str, Any]:
-        """Create a new secret"""
-        serializable_data = self._convert_uuids_to_strings(secret_data)
+    async def create_data(self, data: Dict[str, Any], jwt_token: Optional[str] = None) -> Dict[str, Any]:
+        """Create a new data"""
+        serializable_data = self._convert_uuids_to_strings(data)
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.base_url}/internal/secrets",
+                f"{self.base_url}/internal/data",
                 headers=self._get_headers(jwt_token),
                 json=serializable_data
             )
             response.raise_for_status()
             return response.json()
         
-    async def update_secret(self, secret_id: str, secret_data: Dict[str, Any], jwt_token: Optional[str] = None) -> Dict[str, Any]:
-        """Update an existing secret"""
-        serializable_data = self._convert_uuids_to_strings(secret_data)
+    async def update_data(self, data_id: str, data: Dict[str, Any], jwt_token: Optional[str] = None) -> Dict[str, Any]:
+        """Update an existing data"""
+        serializable_data = self._convert_uuids_to_strings(data)
         
         async with httpx.AsyncClient() as client:
             response = await client.put(
-                f"{self.base_url}/internal/secrets",
+                f"{self.base_url}/internal/data/{data_id}",
                 headers=self._get_headers(jwt_token),
-                params={"secret_id": secret_id},
                 json=serializable_data
             )
             response.raise_for_status()
             return response.json()
         
-    async def delete_secret(self, secret_id: str, jwt_token: Optional[str] = None) -> bool:
-        """Delete a secret by ID"""
+    async def delete_data(self, data_id: str, jwt_token: Optional[str] = None) -> bool:
+        """Delete a data by ID"""
         async with httpx.AsyncClient() as client:
             response = await client.delete(
-                f"{self.base_url}/internal/secrets/{secret_id}",
+                f"{self.base_url}/internal/data/{data_id}",
                 headers=self._get_headers(jwt_token)
             )
             response.raise_for_status()
@@ -177,15 +180,39 @@ class StorageClient:
         return status.get("sealed", True)
     
     
-    async def get_secrets_for_user(self, user_id: str, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get all secrets and filter by user_id (client-side filtering)"""
-        all_secrets = await self.get_all_secrets(jwt_token)
-        try:
-            user_id_int = int(user_id)
-            return [secret for secret in all_secrets if secret.get("user_id") == user_id_int]
-        except (ValueError, TypeError):
-            # If conversion fails, try string comparison as fallback
-            return [secret for secret in all_secrets if str(secret.get("user_id")) == str(user_id)]
+    async def get_data_for_user(self, user_id: str, data_type: Optional[str] = None, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get data for a specific user via admin endpoint"""
+        async with httpx.AsyncClient() as client:
+            params = {"data_type": data_type} if data_type else {}
+            response = await client.get(
+                f"{self.base_url}/internal/data/admin/user/{user_id}",
+                headers=self._get_headers(jwt_token),
+                params=params
+            )
+            response.raise_for_status()
+            return response.json()
+    
+    async def get_all_data_admin(self, data_type: Optional[str] = None, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get all data across all users (admin only)"""
+        params = {"data_type": data_type} if data_type else {}
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.base_url}/internal/data/admin/all",
+                headers=self._get_headers(jwt_token),
+                params=params
+            )
+            response.raise_for_status()
+            return response.json()
+    
+    async def delete_data_admin(self, data_id: str, jwt_token: Optional[str] = None) -> bool:
+        """Delete any user's data (admin only)"""
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(
+                f"{self.base_url}/internal/data/admin/{data_id}",
+                headers=self._get_headers(jwt_token)
+            )
+            response.raise_for_status()
+            return True
     
     async def get_active_encryption_key(self) -> Dict[str, Any]:
         """Get the current active encryption key"""
