@@ -93,15 +93,24 @@ PostgreSQL with tables:
 
 Required in `.env`:
 
-```
+```bash
+# Database Configuration
 DB_HOST=postgres-storage
 DB_PORT=5432
 DB_NAME=storage
 DB_USER=storage_user
 DB_PASSWORD=storage_pass
 
-JWT_SECRET_KEY=your-secret-key
-INTERNAL_SERVICE_TOKEN=service-token
+# Server Configuration
+HOST=0.0.0.0
+PORT=8002
+
+# Debug and Development
+DEBUG=false
+
+# Authentication
+JWT_SECRET_KEY=your-secret-key-here
+INTERNAL_SERVICE_TOKEN=your-internal-token-here
 ```
 
 Runs on port 8002.

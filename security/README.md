@@ -54,14 +54,23 @@ PostgreSQL with tables:
 
 Required variables in `.env`:
 
-```
+```bash
+# Database Configuration
 DB_HOST=postgres-security
 DB_PORT=5432
 DB_NAME=security
 DB_USER=security_user
 DB_PASSWORD=security_pass
 
-JWT_SECRET_KEY=your-secret-key
+# Server Configuration
+HOST=0.0.0.0
+PORT=8001
+
+# Debug and Development
+DEBUG=false
+
+# Authentication
+JWT_SECRET_KEY=your-secret-key-here
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_DAYS=7
 ```

@@ -71,13 +71,28 @@ Cached with TTL (1 hour):
 
 Required in `.env`:
 
-```
+```bash
+# Server Configuration
+HOST=0.0.0.0
+PORT=8000
+
+# Debug and Development
+DEBUG=false
+
+# Microservices Communication
 STORAGE_SERVICE_URL=http://storage:8002
+
+# Authentication
+JWT_SECRET_KEY=your-secret-key-here
+INTERNAL_SERVICE_TOKEN=your-internal-token-here
+
+# Redis Configuration (for master key caching)
 REDIS_HOST=redis
 REDIS_PORT=6379
-REDIS_PASSWORD=redis_pass
-JWT_SECRET_KEY=your-secret-key
-VAULT_ENCRYPTION_KEY=your-fernet-key
+REDIS_DB=0
+
+# Encryption
+ENCRYPTION_KEY=your-fernet-key-base64-encoded
 ```
 
 Runs on port 8000.
