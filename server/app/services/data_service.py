@@ -293,14 +293,15 @@ class DataService:
             
         elif data_type == DataType.KUBERNETES:
             update_list_field("data", update_request.data)
-            if update_request.namespace:
+            if update_request.namespace is not None:
                 metadata["namespace"] = update_request.namespace
             
         elif data_type == DataType.CREDENTIALS:
             update_field("password", update_request.password)
-            if update_request.username:
+            if update_request.username is not None:
                 metadata["username"] = update_request.username
-            if update_request.url:
+                logger.info(f"Setting username in metadata: {update_request.username}")
+            if update_request.url is not None:
                 metadata["url"] = update_request.url
             
         elif data_type == DataType.API_KEY:
@@ -312,9 +313,9 @@ class DataService:
             update_field("publicKey", update_request.publicKey)
             if update_request.publicKey:
                 metadata["hasPublicKey"] = True
-            if update_request.host:
+            if update_request.host is not None:
                 metadata["host"] = update_request.host
-            if update_request.username:
+            if update_request.username is not None:
                 metadata["username"] = update_request.username
             
         elif data_type == DataType.CERTIFICATE:

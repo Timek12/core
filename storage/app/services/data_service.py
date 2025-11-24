@@ -44,6 +44,7 @@ class DataService:
             "description": data_item.description,
             "data_type": data_item.data_type,
             "metadata": parse_metadata_json(data_item.metadata_json),
+            "metadata_json": data_item.metadata_json,
             "ttl_seconds": data_item.ttl_seconds,
             "expires_at": DataService._iso_datetime(data_item.expires_at),
             "version": data_item.version if data_item.version is not None else 1,
