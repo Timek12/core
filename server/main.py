@@ -1,15 +1,12 @@
 import logging
 from pathlib import Path
+from contextlib import asynccontextmanager
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from dotenv import load_dotenv
-import sys
 import os
-
-# Add the project root to Python path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
 
 from app.api import data_api, crypto_api, admin_api
 
@@ -19,7 +16,17 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-app = FastAPI(title="Key Management System API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Starting server service")
+    app.state.http_client = httpx.AsyncClient()
+    yield
+    # Shutdown
+    logger.info("Shutting down server service")
+    await app.state.http_client.aclose()
+
+app = FastAPI(title="Key Management System API", lifespan=lifespan)
 
 # Add CORS middleware
 app.add_middleware(
@@ -50,4 +57,3 @@ if __name__ == "__main__":
     config = uvicorn.Config("main:app", host=host, port=port, log_level="debug" if os.getenv('DEBUG', 'info').lower() == 'debug' else "info")
     server = uvicorn.Server(config)
     server.run()
-    

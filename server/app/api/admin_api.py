@@ -6,6 +6,7 @@ import logging
 from app.utils.jwt_utils import get_admin_user
 from app.dto.token import UserInfo
 from app.clients.storage_client import StorageClient
+from app.dependencies import get_storage_client
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +25,12 @@ def get_token_from_request(request: Request) -> str:
 async def get_all_data(
     request: Request,
     data_type: Optional[str] = None,
-    _: UserInfo = Depends(get_admin_user)
+    _: UserInfo = Depends(get_admin_user),
+    storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Get all data across all users with optional type filtering"""
     try:
         token = get_token_from_request(request)
-        storage_client = StorageClient()
         
         # Use admin endpoint to get all data
         data_list = await storage_client.get_all_data_admin(data_type, token)
@@ -51,12 +52,12 @@ async def get_user_data(
     user_id: int,
     request: Request,
     data_type: Optional[str] = None,
-    _: UserInfo = Depends(get_admin_user)
+    _: UserInfo = Depends(get_admin_user),
+    storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Get all data for a specific user with optional type filtering"""
     try:
         token = get_token_from_request(request)
-        storage_client = StorageClient()
         
         data_list = await storage_client.get_data_for_user(str(user_id), data_type, token)
         
@@ -76,12 +77,12 @@ async def get_user_data(
 async def delete_any_data(
     data_id: str,
     request: Request,
-    _: UserInfo = Depends(get_admin_user)
+    _: UserInfo = Depends(get_admin_user),
+    storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Delete any user's data (admin only)"""
     try:
         token = get_token_from_request(request)
-        storage_client = StorageClient()
         
         success = await storage_client.delete_data_admin(data_id, token)
         

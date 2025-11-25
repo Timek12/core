@@ -3,6 +3,7 @@ from app.services.crypto_service import CryptoService
 from app.clients.storage_client import StorageClient
 from app.utils.jwt_utils import get_current_user, require_role, UserInfo, get_token
 from app.utils.redis_state import get_state_manager
+from app.dependencies import get_storage_client
 from app.dto.crypto import (
     InitRequest, 
     UnsealRequest, 
@@ -10,7 +11,6 @@ from app.dto.crypto import (
     VaultStatus
 )
 import logging
-# from app.dto.server_status import StatusResponse, VaultStatus
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +20,12 @@ router = APIRouter(prefix="/api/crypto", tags=["crypto"])
 async def init(
     req: InitRequest, 
     current_user: UserInfo = Depends(require_role("admin")), 
-    token: str = Depends(get_token)
+    token: str = Depends(get_token),
+    storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Initialize the vault with Redis state management"""
     try:
         state_manager = await get_state_manager()
-        storage_client = StorageClient()
         crypto_service = CryptoService(storage_client=storage_client, state_manager=state_manager)
         
         result = await crypto_service.initialize_vault(
@@ -53,12 +53,12 @@ async def init(
 async def unseal(
     req: UnsealRequest, 
     current_user: UserInfo = Depends(require_role("admin")), 
-    token: str = Depends(get_token)
+    token: str = Depends(get_token),
+    storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Unseal the vault using Redis for session management"""
     try:
         state_manager = await get_state_manager()
-        storage_client = StorageClient()
         crypto_service = CryptoService(storage_client=storage_client, state_manager=state_manager)
         
         result = await crypto_service.unseal_vault(
@@ -107,11 +107,12 @@ async def seal(current_user: UserInfo = Depends(require_role("admin"))):
 
 
 @router.get("/status", response_model=StatusResponse)
-async def status(_: UserInfo = Depends(get_current_user)):
+async def status(
+    storage_client: StorageClient = Depends(get_storage_client)
+):
     """Get vault status from Redis state"""
     try:
         state_manager = await get_state_manager()
-        storage_client = StorageClient()
         crypto_service = CryptoService(storage_client=storage_client, state_manager=state_manager)
         
         result = await crypto_service.get_vault_status()

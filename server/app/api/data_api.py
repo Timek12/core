@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from typing import List, Optional
 import logging
@@ -10,6 +9,7 @@ from app.clients.storage_client import StorageClient
 from app.utils.jwt_utils import get_current_user
 from app.utils.redis_state import get_state_manager
 from app.dto.token import UserInfo
+from app.dependencies import get_storage_client
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +28,13 @@ def get_token_from_request(request: Request) -> str:
 async def get_data(
     request: Request,
     data_type: Optional[str] = Query(None, description="Filter by data type"),
-    user_info: UserInfo = Depends(get_current_user)
+    user_info: UserInfo = Depends(get_current_user),
+    storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Get all data for authenticated user"""
     try:
         token = get_token_from_request(request)
         state_manager = await get_state_manager()
-        storage_client = StorageClient()
         data_service = DataService(storage_client, state_manager)
         
         return await data_service.get_data_for_user(user_info.user_id, token, data_type)
@@ -50,13 +50,13 @@ async def get_data(
 async def get_data_item(
     data_id: str,
     request: Request,
-    _: UserInfo = Depends(get_current_user)
+    _: UserInfo = Depends(get_current_user),
+    storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Get a specific data item by ID with decryption"""
     try:
         token = get_token_from_request(request)
         state_manager = await get_state_manager()
-        storage_client = StorageClient()
         data_service = DataService(storage_client, state_manager)
         
         return await data_service.get_data(data_id, token)
@@ -72,13 +72,13 @@ async def get_data_item(
 async def create_data(
     data: DataCreateRequest,
     request: Request,
-    _: UserInfo = Depends(get_current_user)
+    _: UserInfo = Depends(get_current_user),
+    storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Create a new typed data"""
     try:
         token = get_token_from_request(request)
         state_manager = await get_state_manager()
-        storage_client = StorageClient()
         data_service = DataService(storage_client, state_manager)
         
         return await data_service.create_data(data, token)
@@ -100,13 +100,13 @@ async def update_data(
     data_id: str,
     data: DataUpdateRequest,
     request: Request,
-    _: UserInfo = Depends(get_current_user)
+    _: UserInfo = Depends(get_current_user),
+    storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Update an existing data"""
     try:
         token = get_token_from_request(request)
         state_manager = await get_state_manager()
-        storage_client = StorageClient()
         data_service = DataService(storage_client, state_manager)
         
         return await data_service.update_data(data_id, data, token)
@@ -127,13 +127,13 @@ async def update_data(
 async def delete_data(
     data_id: str,
     request: Request,
-    _: UserInfo = Depends(get_current_user)
+    _: UserInfo = Depends(get_current_user),
+    storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Delete a data"""
     try:
         token = get_token_from_request(request)
         state_manager = await get_state_manager()
-        storage_client = StorageClient()
         data_service = DataService(storage_client, state_manager)
         
         success = await data_service.delete_data(data_id, token)

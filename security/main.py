@@ -7,12 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-# Add the project root to Python path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
-
-# Now import from app
-from app.api import auth_api
+from app.api import auth, users, sessions
 from app.db.schema import provision_schema
 
 # Configure logging
@@ -23,7 +18,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 load_dotenv()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -59,7 +53,9 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(auth_api.router)
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(sessions.router)
 
 
 @app.get("/health")
