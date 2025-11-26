@@ -117,6 +117,33 @@ class RedisStateManager:
             logger.error(f"Error checking vault seal status: {e}")
             return True
 
+    async def log_audit_event(self, 
+                        action: str, 
+                        status: str, 
+                        user_id: Optional[str] = None, 
+                        resource_id: Optional[str] = None, 
+                        resource_type: Optional[str] = None, 
+                        ip_address: Optional[str] = None, 
+                        user_agent: Optional[str] = None, 
+                        details: Optional[str] = None):
+        """Send audit log to Redis Stream"""
+        try:
+            event_data = {
+                "action": action,
+                "status": status,
+                "user_id": str(user_id) if user_id else "",
+                "resource_id": str(resource_id) if resource_id else "",
+                "resource_type": resource_type or "",
+                "ip_address": ip_address or "",
+                "user_agent": user_agent or "",
+                "details": details or ""
+            }
+            
+            await self.redis_client.xadd("audit_stream", event_data)
+            
+        except Exception as e:
+            logger.error(f"Failed to log audit event to Redis: {e}")
+
     async def set_vault_sealed(self, sealed: bool, user_id: Optional[str] = None):
         """Set vault seal status with audit trail"""
         try:
@@ -132,7 +159,7 @@ class RedisStateManager:
             else:
                 pipe.set(f"{self.VAULT_PREFIX}last_unseal_time", timestamp)
             
-            # Audit log
+            # Legacy Audit log (List)
             audit_entry = {
                 "action": "seal" if sealed else "unseal",
                 "user_id": user_id,
@@ -143,6 +170,15 @@ class RedisStateManager:
             pipe.ltrim(f"{self.AUDIT_PREFIX}seal_actions", 0, 99)  # Keep last 100 entries
             
             await pipe.execute()
+            
+            # New Audit Log (Stream)
+            await self.log_audit_event(
+                action="seal_vault" if sealed else "unseal_vault",
+                status="success",
+                user_id=user_id,
+                resource_type="vault",
+                details=f"Vault {'sealed' if sealed else 'unsealed'}"
+            )
             
             logger.info(f"Vault {'sealed' if sealed else 'unsealed'} by user {user_id}")
             
@@ -167,7 +203,7 @@ class RedisStateManager:
             pipe.set(f"{self.VAULT_PREFIX}initialized", "true")
             pipe.set(f"{self.VAULT_PREFIX}init_time", datetime.utcnow().isoformat())
             
-            # Audit log
+            # Legacy Audit log (List)
             audit_entry = {
                 "action": "initialize",
                 "user_id": user_id,
@@ -177,6 +213,15 @@ class RedisStateManager:
             pipe.lpush(f"{self.AUDIT_PREFIX}init_actions", json.dumps(audit_entry))
             
             await pipe.execute()
+            
+            # New Audit Log (Stream)
+            await self.log_audit_event(
+                action="init_vault",
+                status="success",
+                user_id=user_id,
+                resource_type="vault",
+                details="Vault initialized"
+            )
             
             logger.info(f"Vault initialized by user {user_id}")
             

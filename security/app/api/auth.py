@@ -1,5 +1,5 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -10,7 +10,8 @@ from app.dto.token import (
     TokenPair, LoginResponse, RefreshTokenRequest, 
     RefreshTokenResponse, TokenVerificationResponse
 )
-from app.dependencies import get_client_info, oauth2_scheme
+from app.dependencies import get_client_info, oauth2_scheme, get_audit_logger
+from app.clients.audit_logger import RedisAuditLogger
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -18,7 +19,9 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 def register(
     user_data: UserCreate,
     request: Request,
-    db: Session = Depends(get_db)
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    audit_logger: RedisAuditLogger = Depends(get_audit_logger)
 ):
     """ Register a new user based on email password and name."""
     auth_service = AuthService(db)
@@ -31,12 +34,36 @@ def register(
         user_entity = auth_service.user_repo.find_by_id(user.user_id)
         tokens = auth_service.create_token_pair(
             user_entity, device_info, ip_address)
+            
+        # Audit Log
+        background_tasks.add_task(
+            audit_logger.log_event,
+            action="register",
+            status="success",
+            user_id=str(user.user_id),
+            resource_type="user",
+            resource_id=str(user.user_id),
+            ip_address=ip_address,
+            user_agent=device_info,
+            details=f"User registered: {user.email}"
+        )
 
         return LoginResponse(
             user=UserPublic.from_orm(user_entity),
             tokens=tokens
         )
     except ValueError as e:
+        # Audit Log Failure
+        device_info, ip_address = get_client_info(request)
+        background_tasks.add_task(
+            audit_logger.log_event,
+            action="register",
+            status="failure",
+            resource_type="user",
+            ip_address=ip_address,
+            user_agent=device_info,
+            details=f"Registration failed: {str(e)}"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
@@ -47,27 +74,50 @@ def register(
 def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     request: Request,
-    db: Session = Depends(get_db)
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    audit_logger: RedisAuditLogger = Depends(get_audit_logger)
 ):
     """OAuth2 compatible token login."""
 
     auth_service = AuthService(db)
+    device_info, ip_address = get_client_info(request)
 
     # Authenticate user (email and password)
     user = auth_service.authenticate_user(
         form_data.username, form_data.password)
     if not user:
+        # Audit Log Failure
+        background_tasks.add_task(
+            audit_logger.log_event,
+            action="login",
+            status="failure",
+            resource_type="user",
+            ip_address=ip_address,
+            user_agent=device_info,
+            details=f"Login failed for email: {form_data.username}"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Get client info
-    device_info, ip_address = get_client_info(request)
-
     # Create token pair
     tokens = auth_service.create_token_pair(user, device_info, ip_address)
+    
+    # Audit Log Success
+    background_tasks.add_task(
+        audit_logger.log_event,
+        action="login",
+        status="success",
+        user_id=str(user.user_id),
+        resource_type="user",
+        resource_id=str(user.user_id),
+        ip_address=ip_address,
+        user_agent=device_info,
+        details="Login successful"
+    )
 
     return tokens
 
@@ -76,26 +126,49 @@ def login(
 def login_json(
     credentials: LoginRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    audit_logger: RedisAuditLogger = Depends(get_audit_logger)
 ):
     """JSON login endpoint - accepts email/password in request body"""
 
     auth_service = AuthService(db)
+    device_info, ip_address = get_client_info(request)
 
     # Authenticate
     user = auth_service.authenticate_user(credentials.email, credentials.password)
     if not user:
+        # Audit Log Failure
+        background_tasks.add_task(
+            audit_logger.log_event,
+            action="login",
+            status="failure",
+            resource_type="user",
+            ip_address=ip_address,
+            user_agent=device_info,
+            details=f"Login failed for email: {credentials.email}"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Get client info
-    device_info, ip_address = get_client_info(request)
-
     # Create token pair
     tokens = auth_service.create_token_pair(user, device_info, ip_address)
+    
+    # Audit Log Success
+    background_tasks.add_task(
+        audit_logger.log_event,
+        action="login",
+        status="success",
+        user_id=str(user.user_id),
+        resource_type="user",
+        resource_id=str(user.user_id),
+        ip_address=ip_address,
+        user_agent=device_info,
+        details="Login successful"
+    )
 
     return LoginResponse(user=UserPublic.from_orm(user), tokens=tokens)
 

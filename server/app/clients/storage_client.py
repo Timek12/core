@@ -269,3 +269,25 @@ class StorageClient:
         )
         response.raise_for_status()
         return response.json()
+
+    async def get_audit_logs(self, user_id: Optional[str] = None, action: Optional[str] = None, resource_type: Optional[str] = None, limit: int = 100, offset: int = 0, jwt_token: Optional[str] = None) -> Dict[str, Any]:
+        """Get audit logs with filtering"""
+        params = {
+            "limit": limit,
+            "offset": offset
+        }
+        if user_id:
+            params["user_id"] = user_id
+        if action:
+            params["action"] = action
+        if resource_type:
+            params["resource_type"] = resource_type
+            
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/internal/audit",
+            headers=self._get_headers(jwt_token),
+            params=params
+        )
+        response.raise_for_status()
+        return response.json()

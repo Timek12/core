@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, BackgroundTasks
 from typing import List, Optional
 import logging
 
@@ -9,7 +9,7 @@ from app.clients.storage_client import StorageClient
 from app.utils.jwt_utils import get_current_user
 from app.utils.redis_state import get_state_manager
 from app.dto.token import UserInfo
-from app.dependencies import get_storage_client
+from app.dependencies import get_storage_client, get_client_info
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,7 @@ def get_token_from_request(request: Request) -> str:
 @router.get("", response_model=List[DataListItem])
 async def get_data(
     request: Request,
+    background_tasks: BackgroundTasks,
     data_type: Optional[str] = Query(None, description="Filter by data type"),
     user_info: UserInfo = Depends(get_current_user),
     storage_client: StorageClient = Depends(get_storage_client)
@@ -37,7 +38,22 @@ async def get_data(
         state_manager = await get_state_manager()
         data_service = DataService(storage_client, state_manager)
         
-        return await data_service.get_data_for_user(user_info.user_id, token, data_type)
+        result = await data_service.get_data_for_user(user_info.user_id, token, data_type)
+        
+        # Audit Log (Read List)
+        device_info, ip_address = get_client_info(request)
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="read_data_list",
+            status="success",
+            user_id=str(user_info.user_id),
+            resource_type="data",
+            ip_address=ip_address,
+            user_agent=device_info,
+            details=f"Listed data (type: {data_type or 'all'})"
+        )
+        
+        return result
     except Exception as e:
         logger.error(f"Error getting data: {str(e)}")
         raise HTTPException(
@@ -50,7 +66,8 @@ async def get_data(
 async def get_data_item(
     data_id: str,
     request: Request,
-    _: UserInfo = Depends(get_current_user),
+    background_tasks: BackgroundTasks,
+    user_info: UserInfo = Depends(get_current_user),
     storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Get a specific data item by ID with decryption"""
@@ -59,7 +76,23 @@ async def get_data_item(
         state_manager = await get_state_manager()
         data_service = DataService(storage_client, state_manager)
         
-        return await data_service.get_data(data_id, token)
+        result = await data_service.get_data(data_id, token)
+        
+        # Audit Log (Read Item)
+        device_info, ip_address = get_client_info(request)
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="read_data",
+            status="success",
+            user_id=str(user_info.user_id),
+            resource_type="data",
+            resource_id=data_id,
+            ip_address=ip_address,
+            user_agent=device_info,
+            details=f"Read data: {result.name}"
+        )
+        
+        return result
     except Exception as e:
         logger.error(f"Error getting data {data_id}: {str(e)}")
         raise HTTPException(
@@ -72,7 +105,8 @@ async def get_data_item(
 async def create_data(
     data: DataCreateRequest,
     request: Request,
-    _: UserInfo = Depends(get_current_user),
+    background_tasks: BackgroundTasks,
+    user_info: UserInfo = Depends(get_current_user),
     storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Create a new typed data"""
@@ -81,7 +115,23 @@ async def create_data(
         state_manager = await get_state_manager()
         data_service = DataService(storage_client, state_manager)
         
-        return await data_service.create_data(data, token)
+        result = await data_service.create_data(data, token)
+        
+        # Audit Log
+        device_info, ip_address = get_client_info(request)
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="create_data",
+            status="success",
+            user_id=str(user_info.user_id),
+            resource_type="data",
+            resource_id=str(result.id),
+            ip_address=ip_address,
+            user_agent=device_info,
+            details=f"Created data: {data.name} ({data.data_type})"
+        )
+        
+        return result
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -100,7 +150,8 @@ async def update_data(
     data_id: str,
     data: DataUpdateRequest,
     request: Request,
-    _: UserInfo = Depends(get_current_user),
+    background_tasks: BackgroundTasks,
+    user_info: UserInfo = Depends(get_current_user),
     storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Update an existing data"""
@@ -109,7 +160,23 @@ async def update_data(
         state_manager = await get_state_manager()
         data_service = DataService(storage_client, state_manager)
         
-        return await data_service.update_data(data_id, data, token)
+        result = await data_service.update_data(data_id, data, token)
+        
+        # Audit Log
+        device_info, ip_address = get_client_info(request)
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="update_data",
+            status="success",
+            user_id=str(user_info.user_id),
+            resource_type="data",
+            resource_id=data_id,
+            ip_address=ip_address,
+            user_agent=device_info,
+            details=f"Updated data: {data.name}"
+        )
+        
+        return result
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -127,7 +194,8 @@ async def update_data(
 async def delete_data(
     data_id: str,
     request: Request,
-    _: UserInfo = Depends(get_current_user),
+    background_tasks: BackgroundTasks,
+    user_info: UserInfo = Depends(get_current_user),
     storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Delete a data"""
@@ -142,6 +210,20 @@ async def delete_data(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Data not found"
             )
+            
+        # Audit Log
+        device_info, ip_address = get_client_info(request)
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="delete_data",
+            status="success",
+            user_id=str(user_info.user_id),
+            resource_type="data",
+            resource_id=data_id,
+            ip_address=ip_address,
+            user_agent=device_info,
+            details="Deleted data"
+        )
         
         return None
     except HTTPException:

@@ -19,12 +19,17 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+import httpx
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle manager for the application."""
 
     # Startup
     logger.info("Starting security service")
+    
+    # Initialize shared HTTP client
+    app.state.http_client = httpx.AsyncClient()
 
     if provision_schema():
         logger.info("Schema provisioning completed successfully")
@@ -36,6 +41,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down security service")
+    await app.state.http_client.aclose()
 
 # Create FastAPI app
 app = FastAPI(

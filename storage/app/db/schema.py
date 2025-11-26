@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime, timezone
-import uuid
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, Boolean, DateTime,
     TIMESTAMP, Index, inspect
@@ -86,6 +85,28 @@ class ServerStatus(Base):
     sealed = Column(Boolean, nullable=False)
     last_changed = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
 
+class AuditLog(Base):
+    """Audit log table for persistent security logging"""
+    __tablename__ = 'audit_logs'
+    
+    id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    action = Column(String(100), nullable=False)  # e.g., 'login', 'create_secret', 'unseal'
+    user_id = Column(String(255), nullable=True)  # Nullable because some actions might be pre-auth or system
+    resource_id = Column(String(255), nullable=True)  # ID of the affected resource
+    resource_type = Column(String(50), nullable=True)  # e.g., 'secret', 'user', 'vault'
+    status = Column(String(20), nullable=False)  # 'success', 'failure'
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(Text, nullable=True)
+    details = Column(Text, nullable=True)  # JSON string for extra details
+    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+    
+    __table_args__ = (
+        Index('idx_audit_user_id', 'user_id'),
+        Index('idx_audit_action', 'action'),
+        Index('idx_audit_created_at', 'created_at'),
+        Index('idx_audit_resource', 'resource_type', 'resource_id'),
+    )
+
 def schema_exists(engine) -> bool:
     """Check if the schema already exists by inspecting database tables."""
 
@@ -93,7 +114,7 @@ def schema_exists(engine) -> bool:
     existing_tables = inspector.get_table_names()
 
     # Define required tables for this service
-    required_tables = {'data', 'keys', 'data_encryption_keys', 'server_status'}
+    required_tables = {'data', 'encryption_keys', 'data_encryption_keys', 'server_status', 'audit_logs'}
 
     # Check if all required tables exist
     return required_tables.issubset(set(existing_tables))
@@ -196,4 +217,4 @@ def provision_schema():
             if engine:
                 engine.dispose()
                 
-    return False            
+    return False

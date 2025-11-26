@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import os
 import sys
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,7 +15,8 @@ from sqlalchemy import text
 sys.path.append('/app')  # Add the app directory to Python path for Docker
 
 from app.db.schema import provision_schema
-from app.internal import data_api, key_api, status_api, dek_api
+from app.internal import data_api, key_api, status_api, dek_api, audit_api
+from app.consumers.audit_consumer import AuditConsumer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -34,10 +36,20 @@ async def lifespan(app: FastAPI):
         logger.error("Schema provisioning failed")
         sys.exit(1)
 
+    # Start Audit Consumer
+    audit_consumer = AuditConsumer()
+    consumer_task = asyncio.create_task(audit_consumer.start())
+
     yield
 
     # Shutdown
     logger.info("Shutting down storage service")
+    await audit_consumer.stop()
+    consumer_task.cancel()
+    try:
+        await consumer_task
+    except asyncio.CancelledError:
+        pass
 
 # Create FastAPI app
 app = FastAPI(
@@ -60,6 +72,7 @@ app.include_router(data_api.router)
 app.include_router(key_api.router)
 app.include_router(status_api.router)
 app.include_router(dek_api.router)
+app.include_router(audit_api.router)
 
 @app.get("/health")
 def health_check():

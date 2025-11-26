@@ -1,14 +1,19 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
 from app.services.crypto_service import CryptoService
 from app.clients.storage_client import StorageClient
 from app.utils.jwt_utils import get_current_user, require_role, UserInfo, get_token
 from app.utils.redis_state import get_state_manager
-from app.dependencies import get_storage_client
+from app.dependencies import get_storage_client, get_client_info
 from app.dto.crypto import (
     InitRequest, 
     UnsealRequest, 
     StatusResponse, 
-    VaultStatus
+    VaultStatus,
+    IssueDEKResponse,
+    EncryptRequest,
+    EncryptResponse,
+    DecryptRequest,
+    DecryptResponse
 )
 import logging
 
@@ -19,6 +24,8 @@ router = APIRouter(prefix="/api/crypto", tags=["crypto"])
 @router.post("/init", response_model=StatusResponse)
 async def init(
     req: InitRequest, 
+    request: Request,
+    background_tasks: BackgroundTasks,
     current_user: UserInfo = Depends(require_role("admin")), 
     token: str = Depends(get_token),
     storage_client: StorageClient = Depends(get_storage_client)
@@ -32,6 +39,19 @@ async def init(
             external_token=req.external_token,
             user_id=current_user.user_id,
             jwt_token=token
+        )
+        
+        # Audit Log
+        device_info, ip_address = get_client_info(request)
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="init_vault",
+            status="success",
+            user_id=str(current_user.user_id),
+            resource_type="vault",
+            ip_address=ip_address,
+            user_agent=device_info,
+            details="Vault initialized"
         )
         
         return StatusResponse(
@@ -52,6 +72,8 @@ async def init(
 @router.post("/unseal", response_model=StatusResponse)
 async def unseal(
     req: UnsealRequest, 
+    request: Request,
+    background_tasks: BackgroundTasks,
     current_user: UserInfo = Depends(require_role("admin")), 
     token: str = Depends(get_token),
     storage_client: StorageClient = Depends(get_storage_client)
@@ -65,6 +87,19 @@ async def unseal(
             external_token=req.external_token,
             user_id=current_user.user_id,
             jwt_token=token
+        )
+        
+        # Audit Log
+        device_info, ip_address = get_client_info(request)
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="unseal_vault",
+            status="success",
+            user_id=str(current_user.user_id),
+            resource_type="vault",
+            ip_address=ip_address,
+            user_agent=device_info,
+            details="Vault unsealed"
         )
         
         return StatusResponse(
@@ -85,13 +120,30 @@ async def unseal(
 
 
 @router.post("/seal", response_model=StatusResponse)
-async def seal(current_user: UserInfo = Depends(require_role("admin"))):
+async def seal(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user: UserInfo = Depends(require_role("admin"))
+):
     """Seal the vault by clearing Redis session data"""
     try:
         state_manager = await get_state_manager()
         crypto_service = CryptoService(state_manager=state_manager)
         
         result = await crypto_service.seal_vault(user_id=current_user.user_id)
+        
+        # Audit Log
+        device_info, ip_address = get_client_info(request)
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="seal_vault",
+            status="success",
+            user_id=str(current_user.user_id),
+            resource_type="vault",
+            ip_address=ip_address,
+            user_agent=device_info,
+            details="Vault sealed"
+        )
         
         return StatusResponse(
             vault=VaultStatus(
@@ -127,4 +179,124 @@ async def status(
         )
     except Exception as e:
         logger.error(f"Failed to get vault status: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/issue-dek", response_model=IssueDEKResponse)
+async def issue_dek(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user: UserInfo = Depends(require_role("admin")),
+    token: str = Depends(get_token),
+    storage_client: StorageClient = Depends(get_storage_client)
+):
+    """Issue a new Data Encryption Key (DEK)"""
+    try:
+        state_manager = await get_state_manager()
+        crypto_service = CryptoService(storage_client=storage_client, state_manager=state_manager)
+        
+        result = await crypto_service.issue_dek(jwt_token=token)
+        
+        # Audit Log
+        device_info, ip_address = get_client_info(request)
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="issue_dek",
+            status="success",
+            user_id=str(current_user.user_id),
+            resource_type="key",
+            ip_address=ip_address,
+            user_agent=device_info,
+            details=f"Issued DEK ID: {result['dek_id']}"
+        )
+        
+        return IssueDEKResponse(
+            data=result,
+            dek_ciphertext_b64=result["dek_ciphertext_b64"],
+            message="DEK issued successfully"
+        )
+    except Exception as e:
+        logger.error(f"Failed to issue DEK: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/encrypt", response_model=EncryptResponse)
+async def encrypt(
+    req: EncryptRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user: UserInfo = Depends(require_role("admin")),
+    token: str = Depends(get_token),
+    storage_client: StorageClient = Depends(get_storage_client)
+):
+    """Encrypt data using a new DEK"""
+    try:
+        state_manager = await get_state_manager()
+        crypto_service = CryptoService(storage_client=storage_client, state_manager=state_manager)
+        
+        result = await crypto_service.encrypt_data(plaintext=req.plaintext, jwt_token=token)
+        
+        # Audit Log
+        device_info, ip_address = get_client_info(request)
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="encrypt_data",
+            status="success",
+            user_id=str(current_user.user_id),
+            resource_type="data",
+            ip_address=ip_address,
+            user_agent=device_info,
+            details="Data encrypted"
+        )
+        
+        return EncryptResponse(
+            data=result,
+            message="Data encrypted successfully"
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to encrypt data: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/decrypt", response_model=DecryptResponse)
+async def decrypt(
+    req: DecryptRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user: UserInfo = Depends(require_role("admin")),
+    storage_client: StorageClient = Depends(get_storage_client)
+):
+    """Decrypt data using a stored DEK"""
+    try:
+        state_manager = await get_state_manager()
+        crypto_service = CryptoService(storage_client=storage_client, state_manager=state_manager)
+        
+        result = await crypto_service.decrypt_data(
+            ciphertext_b64=req.ciphertext_b64,
+            dek_id=req.dek_id
+        )
+        
+        # Audit Log
+        device_info, ip_address = get_client_info(request)
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="decrypt_data",
+            status="success",
+            user_id=str(current_user.user_id),
+            resource_type="data",
+            ip_address=ip_address,
+            user_agent=device_info,
+            details=f"Data decrypted (DEK ID: {req.dek_id})"
+        )
+        
+        return DecryptResponse(
+            data=result,
+            message="Data decrypted successfully"
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to decrypt data: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

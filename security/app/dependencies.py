@@ -58,3 +58,14 @@ def get_client_info(request: Request) -> tuple[str, str]:
     user_agent = request.headers.get("user-agent", "unknown")
     ip_address = request.client.host if request.client else "unknown"
     return user_agent, ip_address
+
+def get_audit_logger() -> "RedisAuditLogger":
+    """Get Redis audit logger"""
+    from app.clients.audit_logger import RedisAuditLogger
+    return RedisAuditLogger()
+
+def get_auth_service(
+    db: Session = Depends(get_db)
+) -> AuthService:
+    """Get AuthService instance with dependencies"""
+    return AuthService(db)
