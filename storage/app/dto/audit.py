@@ -2,6 +2,8 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 
+from uuid import UUID
+
 class AuditLogCreate(BaseModel):
     action: str
     status: str
@@ -13,7 +15,7 @@ class AuditLogCreate(BaseModel):
     details: Optional[str] = None
 
 class AuditLogResponse(BaseModel):
-    id: str
+    id: UUID
     action: str
     status: str
     user_id: Optional[str]

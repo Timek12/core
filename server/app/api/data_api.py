@@ -89,7 +89,7 @@ async def get_data_item(
             resource_id=data_id,
             ip_address=ip_address,
             user_agent=device_info,
-            details=f"Read data: {result.name}"
+            details=f"Read data: {result['name']}"
         )
         
         return result
@@ -125,7 +125,7 @@ async def create_data(
             status="success",
             user_id=str(user_info.user_id),
             resource_type="data",
-            resource_id=str(result.id),
+            resource_id=str(result['id']),
             ip_address=ip_address,
             user_agent=device_info,
             details=f"Created data: {data.name} ({data.data_type})"

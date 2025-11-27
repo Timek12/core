@@ -35,7 +35,7 @@ async def get_audit_logs(
         token = get_token_from_request(request)
         
         # Access Control
-        if current_user.role != "admin":
+        if "admin" not in current_user.roles:
             # Regular user can only see their own logs
             if user_id and user_id != str(current_user.user_id):
                  raise HTTPException(status_code=403, detail="Cannot view other users' logs")

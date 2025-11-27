@@ -28,7 +28,7 @@ def logout(
 
     auth_service = AuthService(db)
 
-    success = auth_service.revoke_token(revoke_request.refresh_token)
+    success = auth_service.revoke_token(revoke_request.token)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
