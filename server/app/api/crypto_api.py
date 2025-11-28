@@ -35,23 +35,15 @@ async def init(
         state_manager = await get_state_manager()
         crypto_service = CryptoService(storage_client=storage_client, state_manager=state_manager)
         
+        # Audit Log Context
+        device_info, ip_address = get_client_info(request)
+        
         result = await crypto_service.initialize_vault(
             external_token=req.external_token,
             user_id=current_user.user_id,
-            jwt_token=token
-        )
-        
-        # Audit Log
-        device_info, ip_address = get_client_info(request)
-        background_tasks.add_task(
-            state_manager.log_audit_event,
-            action="init_vault",
-            status="success",
-            user_id=str(current_user.user_id),
-            resource_type="vault",
+            jwt_token=token,
             ip_address=ip_address,
-            user_agent=device_info,
-            details="Vault initialized"
+            user_agent=device_info
         )
         
         return StatusResponse(
@@ -83,23 +75,15 @@ async def unseal(
         state_manager = await get_state_manager()
         crypto_service = CryptoService(storage_client=storage_client, state_manager=state_manager)
         
+        # Audit Log Context
+        device_info, ip_address = get_client_info(request)
+        
         result = await crypto_service.unseal_vault(
             external_token=req.external_token,
             user_id=current_user.user_id,
-            jwt_token=token
-        )
-        
-        # Audit Log
-        device_info, ip_address = get_client_info(request)
-        background_tasks.add_task(
-            state_manager.log_audit_event,
-            action="unseal_vault",
-            status="success",
-            user_id=str(current_user.user_id),
-            resource_type="vault",
+            jwt_token=token,
             ip_address=ip_address,
-            user_agent=device_info,
-            details="Vault unsealed"
+            user_agent=device_info
         )
         
         return StatusResponse(
@@ -130,19 +114,13 @@ async def seal(
         state_manager = await get_state_manager()
         crypto_service = CryptoService(state_manager=state_manager)
         
-        result = await crypto_service.seal_vault(user_id=current_user.user_id)
-        
-        # Audit Log
+        # Audit Log Context
         device_info, ip_address = get_client_info(request)
-        background_tasks.add_task(
-            state_manager.log_audit_event,
-            action="seal_vault",
-            status="success",
-            user_id=str(current_user.user_id),
-            resource_type="vault",
+        
+        result = await crypto_service.seal_vault(
+            user_id=current_user.user_id,
             ip_address=ip_address,
-            user_agent=device_info,
-            details="Vault sealed"
+            user_agent=device_info
         )
         
         return StatusResponse(

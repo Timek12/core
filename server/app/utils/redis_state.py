@@ -144,13 +144,20 @@ class RedisStateManager:
         except Exception as e:
             logger.error(f"Failed to log audit event to Redis: {e}")
 
-    async def set_vault_sealed(self, sealed: bool, user_id: Optional[str] = None):
+    async def set_vault_sealed(self, sealed: bool, user_id: Optional[str] = None, ip_address: Optional[str] = None, user_agent: Optional[str] = None):
         """Set vault seal status with audit trail"""
         try:
+            # Check if status is actually changing to avoid duplicate logs
+            current_sealed = await self.redis_client.get(f"{self.VAULT_PREFIX}sealed")
+            new_status = "true" if sealed else "false"
+            
+            if current_sealed == new_status:
+                return
+
             pipe = self.redis_client.pipeline()
             
             # Set seal status
-            pipe.set(f"{self.VAULT_PREFIX}sealed", "true" if sealed else "false")
+            pipe.set(f"{self.VAULT_PREFIX}sealed", new_status)
             
             # Set timestamp
             timestamp = datetime.utcnow().isoformat()
@@ -177,6 +184,8 @@ class RedisStateManager:
                 status="success",
                 user_id=user_id,
                 resource_type="vault",
+                ip_address=ip_address,
+                user_agent=user_agent,
                 details=f"Vault {'sealed' if sealed else 'unsealed'}"
             )
             
@@ -195,7 +204,7 @@ class RedisStateManager:
             logger.error(f"Error checking vault initialization: {e}")
             return False
 
-    async def set_vault_initialized(self, user_id: Optional[str] = None):
+    async def set_vault_initialized(self, user_id: Optional[str] = None, ip_address: Optional[str] = None, user_agent: Optional[str] = None):
         """Mark vault as initialized"""
         try:
             pipe = self.redis_client.pipeline()
@@ -220,6 +229,8 @@ class RedisStateManager:
                 status="success",
                 user_id=user_id,
                 resource_type="vault",
+                ip_address=ip_address,
+                user_agent=user_agent,
                 details="Vault initialized"
             )
             

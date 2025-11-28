@@ -49,7 +49,7 @@ class CryptoService:
         aesgcm = AESGCM(key)
         return aesgcm.decrypt(nonce, ciphertext, associated_data=None)
 
-    async def initialize_vault(self, external_token: str, user_id: str, jwt_token: str) -> Dict:
+    async def initialize_vault(self, external_token: str, user_id: str, jwt_token: str, ip_address: Optional[str] = None, user_agent: Optional[str] = None) -> Dict:
         """Initialize vault: generate keys, encrypt with KEK, store in Storage/Redis."""
         logger.info(f"Initializing vault for user {user_id}")
         
@@ -100,8 +100,8 @@ class CryptoService:
         })
 
         # Set status
-        await state_manager.set_vault_initialized(user_id)
-        await state_manager.set_vault_sealed(True, user_id)
+        await state_manager.set_vault_initialized(user_id, ip_address, user_agent)
+        await state_manager.set_vault_sealed(True, user_id, ip_address, user_agent)
 
         # Cleanup
         del root_key, master_key, kek
@@ -115,7 +115,7 @@ class CryptoService:
             "initialized": True
         }
 
-    async def unseal_vault(self, external_token: str, user_id: str, jwt_token: str) -> Dict:
+    async def unseal_vault(self, external_token: str, user_id: str, jwt_token: str, ip_address: Optional[str] = None, user_agent: Optional[str] = None) -> Dict:
         """Unseal vault: decrypt Root Key with KEK, then Master Key, cache Master Key in Redis."""
         logger.info(f"Unsealing vault for user {user_id}")
         
@@ -166,7 +166,7 @@ class CryptoService:
 
         # Cache Master Key
         await state_manager.store_master_key(master_key.hex(), ttl_hours=1)
-        await state_manager.set_vault_sealed(False, user_id)
+        await state_manager.set_vault_sealed(False, user_id, ip_address, user_agent)
 
         # Cleanup
         del root_key, master_key, kek
@@ -178,13 +178,13 @@ class CryptoService:
             "initialized": True
         }
 
-    async def seal_vault(self, user_id: str) -> Dict:
+    async def seal_vault(self, user_id: str, ip_address: Optional[str] = None, user_agent: Optional[str] = None) -> Dict:
         """Seal vault: clear sensitive keys from Redis."""
         logger.info(f"Sealing vault for user {user_id}")
         
         state_manager = self._ensure_state_manager()
         await state_manager.clear_sensitive_keys()
-        await state_manager.set_vault_sealed(True, user_id)
+        await state_manager.set_vault_sealed(True, user_id, ip_address, user_agent)
 
         logger.info("Vault sealed successfully")
         
