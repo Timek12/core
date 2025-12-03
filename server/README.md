@@ -14,7 +14,7 @@ API gateway and business logic layer. Orchestrates communication between UI, Sec
 
 - **Security Service** - Validates JWT tokens
 - **Storage Service** - Persists encrypted data
-- **Redis** - Caches master key (with TTL)
+- **Redis** - Caches master key
 
 ## Key Architecture
 
@@ -33,10 +33,12 @@ API gateway and business logic layer. Orchestrates communication between UI, Sec
 
 **Vault Management:**
 
-- `POST /api/vault/init` - Initialize vault (one-time)
-- `POST /api/vault/unseal` - Unseal with external token
-- `POST /api/vault/seal` - Clear master key from cache
-- `GET /api/vault/status` - Check vault state
+- `POST /api/crypto/init` - Initialize vault (one-time)
+- `POST /api/crypto/unseal` - Unseal with external token
+- `POST /api/crypto/seal` - Clear master key from cache
+- `GET /api/crypto/status` - Check vault state
+- `POST /api/crypto/encrypt` - Encrypt data
+- `POST /api/crypto/decrypt` - Decrypt data
 
 **Data (User):**
 
@@ -61,7 +63,7 @@ Uses `cryptography` library:
 
 ## Redis State
 
-Cached with TTL (1 hour):
+Cached:
 
 - `vault:keys:master` - Decrypted master key (Fernet encrypted)
 - `vault:sealed` - Vault seal status

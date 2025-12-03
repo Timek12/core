@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import data_api, crypto_api, admin_api, audit_api
+from app.api import data_api, crypto_api, admin_api, audit_api, projects_api
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -42,6 +42,7 @@ app.include_router(crypto_api.router)
 app.include_router(data_api.router)
 app.include_router(admin_api.router)
 app.include_router(audit_api.router)
+app.include_router(projects_api.router)
 
 @app.get('/health')
 def health_check():

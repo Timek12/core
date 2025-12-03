@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Optional, List
 import logging
@@ -42,13 +42,14 @@ def _parse_user_id(user_info: UserInfo) -> int:
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_data(
     request: DataInternalCreate,
+    project_id: Optional[uuid.UUID] = Query(None),
     current_user: UserInfo = Depends(get_current_user),
     service: DataService = Depends(get_data_service),
 ):
-    """Create a new typed data for the authenticated user."""
+    """Create a new typed data for the authenticated user or project."""
     user_id = _parse_user_id(current_user)
     try:
-        return service.create_data(user_id, request)
+        return service.create_data(user_id, request, project_id)
     except Exception as exc:
         logger.error("Failed to create data: %s", exc, exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
@@ -80,6 +81,27 @@ def list_data(
     """List data belonging to the authenticated user."""
     user_id = _parse_user_id(current_user)
     return service.list_data(user_id, data_type)
+
+@router.get("/project/{project_id}")
+def list_data_for_project(
+    project_id: uuid.UUID,
+    data_type: Optional[str] = Query(None, description="Filter by data type"),
+    service: DataService = Depends(get_data_service),
+):
+    """List data belonging to a project."""
+    return service.list_data_for_project(project_id, data_type)
+
+@router.get("/project/{project_id}/{data_id}")
+def get_data_for_project(
+    project_id: uuid.UUID,
+    data_id: uuid.UUID,
+    service: DataService = Depends(get_data_service),
+):
+    """Retrieve a data item for a project."""
+    data_item = service.get_data_for_project(data_id, project_id)
+    if not data_item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data not found")
+    return data_item
 
 
 @router.put("/{data_id}")

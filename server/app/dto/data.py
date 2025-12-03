@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 class DataType(str, Enum):
     """Data type enumeration"""
-    TEXT_WITH_TTL = "text_with_ttl"
+    TEXT = "text"
     KUBERNETES = "kubernetes"
     CREDENTIALS = "credentials"
     API_KEY = "api_key"
@@ -38,7 +38,6 @@ class DataCreateRequest(BaseModel):
     
     # Type-specific fields
     fields: Optional[List[KeyValuePair]] = None
-    ttl: Optional[int] = None
     namespace: Optional[str] = None
     data: Optional[List[KeyValuePair]] = None
     username: Optional[str] = None
@@ -58,7 +57,6 @@ class DataUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=256)
     description: Optional[str] = None
     fields: Optional[List[KeyValuePair]] = None
-    ttl: Optional[int] = None
     namespace: Optional[str] = None
     data: Optional[List[KeyValuePair]] = None
     username: Optional[str] = None
@@ -71,6 +69,7 @@ class DataUpdateRequest(BaseModel):
     host: Optional[str] = None
     certificate: Optional[str] = None
     chain: Optional[str] = None
+    project_id: Optional[str] = None
 
 
 class DataResponse(BaseModel):
@@ -82,12 +81,11 @@ class DataResponse(BaseModel):
     data_type: DataType
     decrypted_data: Dict[str, Any]
     metadata: Optional[DataMetadata] = None
-    ttl_seconds: Optional[int] = None
-    expires_at: Optional[datetime] = None
     version: int
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    project_id: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -102,8 +100,6 @@ class DataListItem(BaseModel):
     data_type: DataType
     version: int
     metadata: Optional[DataMetadata] = None
-    ttl_seconds: Optional[int] = None
-    expires_at: Optional[datetime] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime

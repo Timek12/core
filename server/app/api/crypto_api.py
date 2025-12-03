@@ -160,44 +160,6 @@ async def status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/issue-dek", response_model=IssueDEKResponse)
-async def issue_dek(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    current_user: UserInfo = Depends(require_role("admin")),
-    token: str = Depends(get_token),
-    storage_client: StorageClient = Depends(get_storage_client)
-):
-    """Issue a new Data Encryption Key (DEK)"""
-    try:
-        state_manager = await get_state_manager()
-        crypto_service = CryptoService(storage_client=storage_client, state_manager=state_manager)
-        
-        result = await crypto_service.issue_dek(jwt_token=token)
-        
-        # Audit Log
-        device_info, ip_address = get_client_info(request)
-        background_tasks.add_task(
-            state_manager.log_audit_event,
-            action="issue_dek",
-            status="success",
-            user_id=str(current_user.user_id),
-            resource_type="key",
-            ip_address=ip_address,
-            user_agent=device_info,
-            details=f"Issued DEK ID: {result['dek_id']}"
-        )
-        
-        return IssueDEKResponse(
-            data=result,
-            dek_ciphertext_b64=result["dek_ciphertext_b64"],
-            message="DEK issued successfully"
-        )
-    except Exception as e:
-        logger.error(f"Failed to issue DEK: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.post("/encrypt", response_model=EncryptResponse)
 async def encrypt(
     req: EncryptRequest,

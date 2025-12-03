@@ -1,20 +1,21 @@
 import redis.asyncio as redis
-import json
 import os
-from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
 import logging
-from cryptography.fernet import Fernet
+from typing import Optional, Dict, Any
+from datetime import datetime
+
+from app.clients.audit_logger import RedisAuditLogger
+from app.clients.key_manager import RedisKeyManager
+from app.clients.vault_manager import RedisVaultManager
 
 logger = logging.getLogger(__name__)
 
 class RedisStateManager:
     """
-    Redis state manager with security features:
-    - Encrypted sensitive data storage
-    - Connection pooling and retry logic
-    - TTL management for sensitive keys
-    - Atomic operations for consistency
+    Facade for Redis operations, delegating to specialized managers:
+    - RedisAuditLogger: Audit logging
+    - RedisKeyManager: Key management (Master/Root)
+    - RedisVaultManager: Vault status (Sealed/Init)
     """
     
     def __init__(self):
@@ -23,34 +24,16 @@ class RedisStateManager:
         self.redis_password = os.getenv('REDIS_PASSWORD')
         self.redis_db = int(os.getenv('REDIS_DB', 0))
         
-        # Encryption key for sensitive data
-        encryption_key = os.getenv('VAULT_ENCRYPTION_KEY') or os.getenv('ENCRYPTION_KEY')
-        if not encryption_key:
-            # Generate a key if not provided
-            logger.warning("No VAULT_ENCRYPTION_KEY provided, generating temporary key")
-            encryption_key = Fernet.generate_key().decode()
-        
-        # Ensure the key is properly formatted
-        try:
-            self.cipher = Fernet(encryption_key.encode() if isinstance(encryption_key, str) else encryption_key)
-        except Exception as e:
-            logger.error(f"Invalid encryption key format: {e}")
-            # Generate a valid key as fallback
-            encryption_key = Fernet.generate_key().decode()
-            self.cipher = Fernet(encryption_key.encode())
-        
-        # Redis connection pool
         self.pool = None
         self.redis_client = None
         
-        # Key prefixes for organization
-        self.VAULT_PREFIX = "vault:"
-        self.KEY_PREFIX = "vault:keys:"
-        self.SESSION_PREFIX = "vault:sessions:"
-        self.AUDIT_PREFIX = "vault:audit:"
+        # Sub-managers
+        self.audit_logger: Optional[RedisAuditLogger] = None
+        self.key_manager: Optional[RedisKeyManager] = None
+        self.vault_manager: Optional[RedisVaultManager] = None
         
     async def initialize(self):
-        """Initialize Redis connection pool"""
+        """Initialize Redis connection pool and sub-managers"""
         try:
             # Build connection pool parameters
             pool_kwargs = {
@@ -64,7 +47,7 @@ class RedisStateManager:
                 'socket_keepalive': True
             }
             
-            # Add socket keepalive options with proper constants
+            # Add socket keepalive options
             try:
                 import socket
                 pool_kwargs['socket_keepalive_options'] = {
@@ -73,12 +56,15 @@ class RedisStateManager:
                     socket.TCP_KEEPCNT: 5
                 }
             except (AttributeError, OSError):
-                # Skip keepalive options if not supported on this platform
                 logger.warning("TCP keepalive options not supported on this platform")
             
             self.pool = redis.ConnectionPool(**pool_kwargs)
-            
             self.redis_client = redis.Redis(connection_pool=self.pool)
+            
+            # Initialize sub-managers
+            self.audit_logger = RedisAuditLogger(self.redis_client)
+            self.key_manager = RedisKeyManager(self.redis_client)
+            self.vault_manager = RedisVaultManager(self.redis_client, self.audit_logger, self.key_manager)
             
             # Test connection
             await self.redis_client.ping()
@@ -95,259 +81,40 @@ class RedisStateManager:
         if self.pool:
             await self.pool.disconnect()
 
-    def _encrypt_sensitive_data(self, data: str) -> str:
-        """Encrypt sensitive data before storing in Redis"""
-        return self.cipher.encrypt(data.encode()).decode()
-    
-    def _decrypt_sensitive_data(self, encrypted_data: str) -> str:
-        """Decrypt sensitive data after retrieving from Redis"""
-        return self.cipher.decrypt(encrypted_data.encode()).decode()
-    
+    # --- Facade Methods ---
+
+    async def log_audit_event(self, *args, **kwargs):
+        return await self.audit_logger.log_event(*args, **kwargs)
+
     async def is_vault_sealed(self) -> bool:
-        """Check if vault is sealed"""
-        try:
-            master_key = await self.get_master_key()
-            if not master_key:
-                await self.set_vault_sealed(True)
-                return True
-        
-            sealed = await self.redis_client.get(f"{self.VAULT_PREFIX}sealed")
-            return sealed == "true" if sealed else True  # Default to sealed
-        except Exception as e:
-            logger.error(f"Error checking vault seal status: {e}")
-            return True
+        return await self.vault_manager.is_vault_sealed()
 
-    async def log_audit_event(self, 
-                        action: str, 
-                        status: str, 
-                        user_id: Optional[str] = None, 
-                        resource_id: Optional[str] = None, 
-                        resource_type: Optional[str] = None, 
-                        ip_address: Optional[str] = None, 
-                        user_agent: Optional[str] = None, 
-                        details: Optional[str] = None):
-        """Send audit log to Redis Stream"""
-        try:
-            event_data = {
-                "action": action,
-                "status": status,
-                "user_id": str(user_id) if user_id else "",
-                "resource_id": str(resource_id) if resource_id else "",
-                "resource_type": resource_type or "",
-                "ip_address": ip_address or "",
-                "user_agent": user_agent or "",
-                "details": details or ""
-            }
-            
-            await self.redis_client.xadd("audit_stream", event_data)
-            
-        except Exception as e:
-            logger.error(f"Failed to log audit event to Redis: {e}")
-
-    async def set_vault_sealed(self, sealed: bool, user_id: Optional[str] = None, ip_address: Optional[str] = None, user_agent: Optional[str] = None):
-        """Set vault seal status with audit trail"""
-        try:
-            # Check if status is actually changing to avoid duplicate logs
-            current_sealed = await self.redis_client.get(f"{self.VAULT_PREFIX}sealed")
-            new_status = "true" if sealed else "false"
-            
-            if current_sealed == new_status:
-                return
-
-            pipe = self.redis_client.pipeline()
-            
-            # Set seal status
-            pipe.set(f"{self.VAULT_PREFIX}sealed", new_status)
-            
-            # Set timestamp
-            timestamp = datetime.utcnow().isoformat()
-            if sealed:
-                pipe.set(f"{self.VAULT_PREFIX}last_seal_time", timestamp)
-            else:
-                pipe.set(f"{self.VAULT_PREFIX}last_unseal_time", timestamp)
-            
-            # Legacy Audit log (List)
-            audit_entry = {
-                "action": "seal" if sealed else "unseal",
-                "user_id": user_id,
-                "timestamp": timestamp,
-                "success": True
-            }
-            pipe.lpush(f"{self.AUDIT_PREFIX}seal_actions", json.dumps(audit_entry))
-            pipe.ltrim(f"{self.AUDIT_PREFIX}seal_actions", 0, 99)  # Keep last 100 entries
-            
-            await pipe.execute()
-            
-            # New Audit Log (Stream)
-            await self.log_audit_event(
-                action="seal_vault" if sealed else "unseal_vault",
-                status="success",
-                user_id=user_id,
-                resource_type="vault",
-                ip_address=ip_address,
-                user_agent=user_agent,
-                details=f"Vault {'sealed' if sealed else 'unsealed'}"
-            )
-            
-            logger.info(f"Vault {'sealed' if sealed else 'unsealed'} by user {user_id}")
-            
-        except Exception as e:
-            logger.error(f"Error setting vault seal status: {e}")
-            raise
+    async def set_vault_sealed(self, *args, **kwargs):
+        return await self.vault_manager.set_vault_sealed(*args, **kwargs)
 
     async def is_vault_initialized(self) -> bool:
-        """Check if vault is initialized"""
-        try:
-            initialized = await self.redis_client.get(f"{self.VAULT_PREFIX}initialized")
-            return initialized == "true" if initialized else False
-        except Exception as e:
-            logger.error(f"Error checking vault initialization: {e}")
-            return False
+        return await self.vault_manager.is_vault_initialized()
 
-    async def set_vault_initialized(self, user_id: Optional[str] = None, ip_address: Optional[str] = None, user_agent: Optional[str] = None):
-        """Mark vault as initialized"""
-        try:
-            pipe = self.redis_client.pipeline()
-            
-            pipe.set(f"{self.VAULT_PREFIX}initialized", "true")
-            pipe.set(f"{self.VAULT_PREFIX}init_time", datetime.utcnow().isoformat())
-            
-            # Legacy Audit log (List)
-            audit_entry = {
-                "action": "initialize",
-                "user_id": user_id,
-                "timestamp": datetime.utcnow().isoformat(),
-                "success": True
-            }
-            pipe.lpush(f"{self.AUDIT_PREFIX}init_actions", json.dumps(audit_entry))
-            
-            await pipe.execute()
-            
-            # New Audit Log (Stream)
-            await self.log_audit_event(
-                action="init_vault",
-                status="success",
-                user_id=user_id,
-                resource_type="vault",
-                ip_address=ip_address,
-                user_agent=user_agent,
-                details="Vault initialized"
-            )
-            
-            logger.info(f"Vault initialized by user {user_id}")
-            
-        except Exception as e:
-            logger.error(f"Error setting vault initialization: {e}")
-            raise
-    
-    async def store_master_key(self, master_key_hex: str, ttl_hours: int = 1):
-        """Store encrypted master key with TTL for security"""
-        try:
-            key = f"{self.KEY_PREFIX}master"
-            logger.info(f"Storing master key at Redis key: {key}, input length: {len(master_key_hex)}")
-            
-            # Double encrypt the master key
-            double_encrypted = self._encrypt_sensitive_data(master_key_hex)
-            logger.info(f"Master key encrypted, encrypted length: {len(double_encrypted)}")
-            
-            # Store with TTL
-            ttl_seconds = ttl_hours * 3600
-            await self.redis_client.setex(
-                key,
-                ttl_seconds,
-                double_encrypted
-            )
-            
-            logger.info(f"Master key stored successfully at {key} with {ttl_hours}h TTL ({ttl_seconds}s)")
-            
-        except Exception as e:
-            logger.error(f"Error storing master key: {e}", exc_info=True)
-            raise
+    async def set_vault_initialized(self, *args, **kwargs):
+        return await self.vault_manager.set_vault_initialized(*args, **kwargs)
+
+    async def get_vault_status(self) -> Dict[str, Any]:
+        return await self.vault_manager.get_vault_status()
+
+    async def store_master_key(self, master_key_hex: str):
+        return await self.key_manager.store_master_key(master_key_hex)
 
     async def get_master_key(self) -> Optional[str]:
-        """Retrieve and decrypt master key"""
-        try:
-            key = f"{self.KEY_PREFIX}master"
-            logger.info(f"Attempting to get master key from Redis with key: {key}")
-            double_encrypted = await self.redis_client.get(key)
-            if not double_encrypted:
-                logger.warning(f"Master key not found in Redis at key: {key}")
-                return None
-            
-            logger.info("Master key found in Redis, decrypting...")
-            decrypted = self._decrypt_sensitive_data(double_encrypted)
-            logger.info(f"Master key successfully decrypted, length: {len(decrypted) if decrypted else 0}")
-            return decrypted
-            
-        except Exception as e:
-            logger.error(f"Error retrieving master key: {e}", exc_info=True)
-            return None
+        return await self.key_manager.get_master_key()
 
     async def store_root_key_info(self, root_key_info: Dict[str, Any]):
-        """Store root key metadata (not the key itself)"""
-        try:
-            await self.redis_client.set(
-                f"{self.KEY_PREFIX}root_info",
-                json.dumps(root_key_info)
-            )
-            logger.info("Root key info stored")
-        except Exception as e:
-            logger.error(f"Error storing root key info: {e}")
-            raise
+        return await self.key_manager.store_root_key_info(root_key_info)
 
     async def get_root_key_info(self) -> Optional[Dict[str, Any]]:
-        """Get root key metadata"""
-        try:
-            info = await self.redis_client.get(f"{self.KEY_PREFIX}root_info")
-            return json.loads(info) if info else None
-        except Exception as e:
-            logger.error(f"Error retrieving root key info: {e}")
-            return None
+        return await self.key_manager.get_root_key_info()
 
     async def clear_sensitive_keys(self):
-        """Clear all sensitive keys from memory (on seal)"""
-        try:
-            pipe = self.redis_client.pipeline()
-            pipe.delete(f"{self.KEY_PREFIX}master")
-            pipe.delete(f"{self.KEY_PREFIX}derived_keys")
-            await pipe.execute()
-            
-            logger.info("Sensitive keys cleared from Redis")
-            
-        except Exception as e:
-            logger.error(f"Error clearing sensitive keys: {e}")
-    
-    async def get_vault_status(self) -> Dict[str, Any]:
-        """Get comprehensive vault status"""
-        try:
-            pipe = self.redis_client.pipeline()
-            pipe.get(f"{self.VAULT_PREFIX}sealed")
-            pipe.get(f"{self.VAULT_PREFIX}initialized") 
-            pipe.get(f"{self.VAULT_PREFIX}last_seal_time")
-            pipe.get(f"{self.VAULT_PREFIX}last_unseal_time")
-            pipe.get(f"{self.VAULT_PREFIX}init_time")
-            pipe.exists(f"{self.KEY_PREFIX}master")
-            
-            results = await pipe.execute()
-            
-            return {
-                "sealed": results[0] == "true" if results[0] else True,
-                "initialized": results[1] == "true" if results[1] else False,
-                "last_seal_time": results[2],
-                "last_unseal_time": results[3], 
-                "init_time": results[4],
-                "master_key_in_cache": bool(results[5]),
-                "redis_connected": True
-            }
-            
-        except Exception as e:
-            logger.error(f"Error getting vault status: {e}")
-            return {
-                "sealed": True,
-                "initialized": False,
-                "redis_connected": False,
-                "error": str(e)
-            }
+        return await self.key_manager.clear_sensitive_keys()
 
     async def health_check(self) -> Dict[str, Any]:
         """Redis health check"""
@@ -365,7 +132,6 @@ class RedisStateManager:
                 "used_memory_human": info.get("used_memory_human", "unknown"),
                 "uptime_in_seconds": info.get("uptime_in_seconds", 0)
             }
-            
         except Exception as e:
             return {
                 "status": "unhealthy",

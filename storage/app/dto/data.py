@@ -9,7 +9,7 @@ import json
 class DataType(str, Enum):
     """Data type enumeration"""
 
-    TEXT_WITH_TTL = "text_with_ttl"
+    TEXT = "text"
     KUBERNETES = "kubernetes"
     CREDENTIALS = "credentials"
     API_KEY = "api_key"
@@ -43,7 +43,6 @@ class DataCreateRequest(BaseModel):
     description: str = Field(default="")
     data_type: DataType
     fields: Optional[List[KeyValuePair]] = None
-    ttl: Optional[int] = None
     namespace: Optional[str] = None
     data: Optional[List[KeyValuePair]] = None
     username: Optional[str] = None
@@ -66,8 +65,8 @@ class DataCreateRequest(BaseModel):
         return value
 
     def validate_type_specific_fields(self):
-        if self.data_type == DataType.TEXT_WITH_TTL and not self.fields:
-            raise ValueError("fields required for text_with_ttl")
+        if self.data_type == DataType.TEXT and not self.fields:
+            raise ValueError("fields required for text")
         if self.data_type == DataType.KUBERNETES:
             if not self.namespace:
                 raise ValueError("namespace required for kubernetes")
@@ -89,7 +88,6 @@ class DataUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=256)
     description: Optional[str] = None
     fields: Optional[List[KeyValuePair]] = None
-    ttl: Optional[int] = None
     namespace: Optional[str] = None
     data: Optional[List[KeyValuePair]] = None
     username: Optional[str] = None
@@ -114,17 +112,6 @@ class DataInternalCreate(BaseModel):
     encrypted_value: str
     dek_id: UUID
     metadata_json: Optional[str] = None
-    ttl_seconds: Optional[int] = Field(default=None, ge=0)
-    expires_at: Optional[datetime] = None
-
-    @validator("expires_at", pre=True)
-    def _parse_expires_at(cls, value):
-        if value is None or isinstance(value, datetime):
-            return value
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError as exc:
-            raise ValueError("Invalid expires_at format") from exc
 
 
 class DataInternalUpdate(BaseModel):
@@ -136,17 +123,7 @@ class DataInternalUpdate(BaseModel):
     encrypted_value: Optional[str] = None
     dek_id: Optional[UUID] = None
     metadata_json: Optional[str] = None
-    ttl_seconds: Optional[int] = Field(default=None, ge=0)
-    expires_at: Optional[datetime] = None
-
-    @validator("expires_at", pre=True)
-    def _parse_expires_at(cls, value):
-        if value is None or isinstance(value, datetime):
-            return value
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError as exc:
-            raise ValueError("Invalid expires_at format") from exc
+    project_id: Optional[UUID] = None
 
 
 class DataResponse(BaseModel):
@@ -159,12 +136,11 @@ class DataResponse(BaseModel):
     data_type: DataType
     decrypted_data: Dict[str, Any]
     metadata: Optional[DataMetadata] = None
-    ttl_seconds: Optional[int] = None
-    expires_at: Optional[datetime] = None
     version: int
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    project_id: Optional[UUID] = None
 
     class Config:
         from_attributes = True
@@ -179,8 +155,6 @@ class DataListItem(BaseModel):
     description: str
     data_type: DataType
     metadata: Optional[DataMetadata] = None
-    ttl_seconds: Optional[int] = None
-    expires_at: Optional[datetime] = None
     is_active: bool
     version: int
     created_at: datetime

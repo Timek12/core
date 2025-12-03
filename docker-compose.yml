@@ -125,12 +125,17 @@ services:
       DB_PASSWORD: security_pass
       DB_PORT: 5432
       PORT: 8001
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_pass}
     ports:
       - "8001:8001"
     networks:
       - network
     depends_on:
       postgres-security:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:

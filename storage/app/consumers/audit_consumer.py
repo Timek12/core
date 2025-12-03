@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import redis.asyncio as redis
@@ -65,7 +64,6 @@ class AuditConsumer:
 
             except Exception as e:
                 logger.error(f"Error in consumer loop: {e}")
-                await asyncio.sleep(1)
 
     async def process_message(self, message_id: str, data: dict):
         """Process a single audit message and save to DB."""

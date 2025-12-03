@@ -16,8 +16,8 @@ class DataRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def create_data(self, user_id: int, data: DataInternalCreate) -> Data:
-        """Persist a new data for a user."""
+    def create_data(self, user_id: int, data: DataInternalCreate, project_id: Optional[uuid.UUID] = None) -> Data:
+        """Persist a new data for a user or project."""
         data_item = Data(
             user_id=user_id,
             name=data.name,
@@ -26,10 +26,9 @@ class DataRepository:
             metadata_json=data.metadata_json,
             encrypted_value=data.encrypted_value,
             dek_id=uuid.UUID(str(data.dek_id)),
-            ttl_seconds=data.ttl_seconds,
-            expires_at=data.expires_at,
             is_active=True,
             version=1,
+            project_id=project_id
         )
         self.db.add(data_item)
         self.db.commit()
@@ -44,6 +43,36 @@ class DataRepository:
                 Data.id == data_id,
                 Data.user_id == user_id,
                 Data.is_active.is_(True),
+                Data.project_id.is_(None) # Only personal data
+            )
+            .first()
+        )
+
+    def get_accessible_data(self, data_id: uuid.UUID, user_id: int) -> Optional[Data]:
+        """Fetch data if user is owner OR project member."""
+        from app.db.schema import ProjectMember
+        
+        # Check if user is owner (personal or project secret created by them)
+        data = (
+            self.db.query(Data)
+            .filter(
+                Data.id == data_id,
+                Data.user_id == user_id,
+                Data.is_active.is_(True)
+            )
+            .first()
+        )
+        if data:
+            return data
+            
+        # Check if user is member of the project the secret belongs to
+        return (
+            self.db.query(Data)
+            .join(ProjectMember, Data.project_id == ProjectMember.project_id)
+            .filter(
+                Data.id == data_id,
+                ProjectMember.user_id == user_id,
+                Data.is_active.is_(True)
             )
             .first()
         )
@@ -53,10 +82,33 @@ class DataRepository:
         query = self.db.query(Data).filter(
             Data.user_id == user_id,
             Data.is_active.is_(True),
+            Data.project_id.is_(None) # Only personal data
         )
         if data_type:
             query = query.filter(Data.data_type == data_type)
         return query.order_by(Data.created_at.desc()).all()
+
+    def list_data_for_project(self, project_id: uuid.UUID, data_type: Optional[str] = None) -> List[Data]:
+        """Return active data for a project."""
+        query = self.db.query(Data).filter(
+            Data.project_id == project_id,
+            Data.is_active.is_(True)
+        )
+        if data_type:
+            query = query.filter(Data.data_type == data_type)
+        return query.order_by(Data.created_at.desc()).all()
+
+    def get_data_for_project(self, data_id: uuid.UUID, project_id: uuid.UUID) -> Optional[Data]:
+        """Fetch a data that belongs to the given project."""
+        return (
+            self.db.query(Data)
+            .filter(
+                Data.id == data_id,
+                Data.project_id == project_id,
+                Data.is_active.is_(True),
+            )
+            .first()
+        )
 
     def update_data(self, data_item: Data, data: DataInternalUpdate) -> Data:
         """Apply updates to a data record."""
@@ -74,10 +126,8 @@ class DataRepository:
             data_item.encrypted_value = data.encrypted_value
         if data.dek_id is not None:
             data_item.dek_id = uuid.UUID(str(data.dek_id))
-        if data.ttl_seconds is not None:
-            data_item.ttl_seconds = data.ttl_seconds
-        if data.expires_at is not None:
-            data_item.expires_at = data.expires_at
+        if data.project_id is not None:
+            data_item.project_id = data.project_id
 
         data_item.version = (data_item.version or 0) + 1
         data_item.updated_at = datetime.now(timezone.utc)

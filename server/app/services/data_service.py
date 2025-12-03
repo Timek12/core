@@ -20,7 +20,8 @@ class DataService:
     async def create_data(
         self, 
         data: DataCreateRequest,
-        jwt_token: str
+        jwt_token: str,
+        project_id: Optional[str] = None
     ) -> Dict:
         """
         Create a new typed data using DEK (Data Encryption Key) architecture:
@@ -33,7 +34,7 @@ class DataService:
         7. Get master key ID from storage
         8. Store encrypted data with reference to DEK and master key
         """
-        logger.info(f"Creating data '{data.name}' of type {data.data_type}")
+        logger.info(f"Creating data '{data.name}' of type {data.data_type} (Project: {project_id})")
         
         # Step 1: Check if vault is unsealed
         if await self.state_manager.is_vault_sealed():
@@ -52,7 +53,7 @@ class DataService:
         payload = {}
         metadata = {}
         
-        if data.data_type == DataType.TEXT_WITH_TTL:
+        if data.data_type == DataType.TEXT:
             payload = {"fields": [f.dict() for f in data.fields]} if data.fields else {}
             
         elif data.data_type == DataType.KUBERNETES:
@@ -87,7 +88,7 @@ class DataService:
             if data.chain:
                 payload["chain"] = data.chain
                 metadata["hasChain"] = True
-
+        
         # Serialize payload
         payload_json = json.dumps(payload)
         
@@ -127,11 +128,10 @@ class DataService:
                 "ciphertext": encrypted_data_val.hex()
             }),
             "metadata_json": json.dumps(metadata),
-            "ttl_seconds": data.ttl,
             "version": 1,
         }
         
-        result = await self.storage_client.create_data(storage_data, jwt_token)
+        result = await self.storage_client.create_data(storage_data, project_id=project_id, jwt_token=jwt_token)
         logger.info(f"Data created successfully with ID: {result.get('id')}")
         
         if 'user_id' in result:
@@ -213,10 +213,65 @@ class DataService:
         
         return data_list
 
+    async def list_data_for_project(self, project_id: str, jwt_token: str, data_type: Optional[str] = None) -> List[Dict]:
+        """
+        Get all project data and decrypt them
+        """
+        logger.info(f"Fetching data for project {project_id}")
+        
+        # Step 1: Fetch data from storage
+        data_list = await self.storage_client.list_data_for_project(project_id, data_type=data_type, jwt_token=jwt_token)
+        
+        # Step 2: Decrypt data if vault is unsealed
+        if not await self.state_manager.is_vault_sealed():
+            master_key_hex = await self.state_manager.get_master_key()
+            if master_key_hex:
+                master_key = bytes.fromhex(master_key_hex)
+                
+                for data_item in data_list:
+                    data_item['metadata'] = parse_metadata_json(data_item.get('metadata_json'))
+                    await self._decrypt_data_item(data_item, master_key)
+                
+                del master_key
+        else:
+            for data_item in data_list:
+                data_item["decrypted_data"] = {}
+                data_item['metadata'] = parse_metadata_json(data_item.get('metadata_json'))
+        
+        for data_item in data_list:
+            if 'user_id' in data_item:
+                data_item['user_id'] = str(data_item['user_id'])
+        
+        return data_list
+
+    async def get_data_for_project(self, project_id: str, data_id: str, jwt_token: str) -> Dict:
+        """ Get a specific project data and decrypt it """
+        logger.info(f"Fetching data {data_id} for project {project_id}")
+        
+        data_item = await self.storage_client.get_data_for_project(project_id, data_id, jwt_token)
+        
+        data_item['metadata'] = parse_metadata_json(data_item.get('metadata_json'))
+        
+        if not await self.state_manager.is_vault_sealed():
+            master_key_hex = await self.state_manager.get_master_key()
+            if master_key_hex:
+                master_key = bytes.fromhex(master_key_hex)
+                await self._decrypt_data_item(data_item, master_key)
+                del master_key
+            else:
+                data_item["decrypted_data"] = {}
+        else:
+            data_item["decrypted_data"] = {}
+        
+        if 'user_id' in data_item:
+            data_item['user_id'] = str(data_item['user_id'])
+            
+        return data_item
+
+    
+
     async def get_data(self, data_id: str, jwt_token: str) -> Dict:
-        """
-        Get a specific data and decrypt it
-        """
+        """ Get a specific data and decrypt it """
         logger.info(f"Fetching data {data_id}")
         
         data_item = await self.storage_client.get_data(data_id, jwt_token)
@@ -240,14 +295,13 @@ class DataService:
         return data_item
 
     async def update_data(
-        self, 
-        data_id: str, 
-        update_request: DataUpdateRequest, 
-        jwt_token: str
+        self,
+        data_id: str,
+        update_request: DataUpdateRequest,
+        jwt_token: str,
+        user_id: str
     ) -> Dict:
-        """
-        Update a data. If payload fields are provided, creates new DEK and re-encrypts.
-        """
+        """ Update a data. If payload fields are provided, creates new DEK and re-encrypts. """
         logger.info(f"Updating data {data_id}")
         
         # Fetch existing data to get type and current values
@@ -288,7 +342,7 @@ class DataService:
             elif field_name in current_decrypted:
                 payload[field_name] = current_decrypted[field_name]
 
-        if data_type == DataType.TEXT_WITH_TTL:
+        if data_type == DataType.TEXT:
             update_list_field("fields", update_request.fields)
             
         elif data_type == DataType.KUBERNETES:
@@ -371,26 +425,36 @@ class DataService:
             current_metadata = parse_metadata_json(current_data.get("metadata_json"))
             current_metadata.update(metadata)
             final_update_data["metadata_json"] = json.dumps(current_metadata)
-
-        if update_request.ttl is not None:
-            final_update_data["ttl_seconds"] = update_request.ttl
-            
-        if not final_update_data:
-            return current_data
-            
-        result = await self.storage_client.update_data(data_id, final_update_data, jwt_token)
         
-        return await self.get_data(data_id, jwt_token)
+        # Permission check: Only owner can change project assignment
+        if update_request.project_id is not None:
+            current_project_id = current_data.get("project_id")
+            # Check if project is actually changing
+            if str(current_project_id or "") != str(update_request.project_id or ""):
+                # Check if user is the owner
+                if str(current_data.get("user_id")) != str(user_id):
+                    raise ValueError("Only the owner can change the project assignment")
+            
+            final_update_data["project_id"] = update_request.project_id
+
+        updated = await self.storage_client.update_data(data_id, final_update_data, jwt_token)
+        
+        if not updated:
+            raise ValueError("Data not found")
+            
+        # Add decrypted data to result for response
+        updated['decrypted_data'] = payload
+        updated['metadata'] = parse_metadata_json(updated.get('metadata_json'))
+        
+        if 'user_id' in updated:
+            updated['user_id'] = str(updated['user_id'])
+        
+        return updated
 
     async def delete_data(self, data_id: str, jwt_token: str) -> bool:
-        """
-        Delete a data
-        """
+        """ Delete a data item """
         logger.info(f"Deleting data {data_id}")
         
-        deleted = await self.storage_client.delete_data(data_id, jwt_token)
+        result = await self.storage_client.delete_data(data_id, jwt_token)
         
-        if not deleted:
-            raise ValueError("Data not found")
-        
-        return True
+        return result

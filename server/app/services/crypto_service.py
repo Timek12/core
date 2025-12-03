@@ -1,6 +1,4 @@
-﻿from __future__ import annotations
-
-import base64
+﻿import base64
 import json
 import os
 import secrets
@@ -165,7 +163,7 @@ class CryptoService:
             raise ValueError("Master key decryption failed")
 
         # Cache Master Key
-        await state_manager.store_master_key(master_key.hex(), ttl_hours=1)
+        await state_manager.store_master_key(master_key.hex())
         await state_manager.set_vault_sealed(False, user_id, ip_address, user_agent)
 
         # Cleanup
@@ -194,7 +192,7 @@ class CryptoService:
         }
 
     async def get_vault_status(self) -> Dict:
-        """Get vault status (sealed/initialized)."""
+        """Get vault status."""
         state_manager = self._ensure_state_manager()
         return {
             "sealed": await state_manager.is_vault_sealed(),
@@ -202,32 +200,6 @@ class CryptoService:
             "version": "1.0"
         }
 
-    async def issue_dek(self, jwt_token: str) -> Dict[str, Any]:
-        """Issue new DEK, encrypt with Master Key, store in Storage."""
-        state_manager = self._ensure_state_manager()
-        master_key_hex = await state_manager.get_master_key()
-        if not master_key_hex:
-            raise ValueError("Vault is sealed")
-        master_key = bytes.fromhex(master_key_hex)
-
-        # Generate & Encrypt DEK
-        dek = secrets.token_bytes(32)
-        dek_nonce, encrypted_dek = self.aesgcm_encrypt(master_key, dek)
-        
-        # Store DEK
-        dek_payload = {
-            "encrypted_dek": encrypted_dek.hex(),
-            "nonce": dek_nonce.hex()
-        }
-        dek_record = await self.storage_client.create_dek(dek_payload, jwt_token)
-        
-        return {
-            "dek_id": dek_record["id"],
-            "key_type": "dek",
-            "version": 1,
-            "created_at": dek_record["created_at"],
-            "dek_ciphertext_b64": base64.b64encode(encrypted_dek).decode("utf-8")
-        }
 
     async def encrypt_data(self, plaintext: str, jwt_token: str) -> Dict[str, Any]:
         """Encrypt data: generate DEK, encrypt DEK (Master Key), encrypt data (DEK)."""

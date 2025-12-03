@@ -1,12 +1,13 @@
 import uuid
 import httpx
 import os
+import json
 from typing import Dict, Any, List, Optional
 
 
 class StorageClient:
     def __init__(self, client: Optional[httpx.AsyncClient] = None):
-        self.base_url = os.getenv("STORAGE_SERVICE_URL", "http://storage:8000")
+        self.base_url = os.getenv("STORAGE_SERVICE_URL", "http://storage:8002")
         self.internal_token = os.getenv("INTERNAL_SERVICE_TOKEN")
         self.headers: Dict[str, str] = {}
         if self.internal_token:
@@ -61,23 +62,30 @@ class StorageClient:
         )
         response.raise_for_status()
         return response.json()
+
+    async def create_data(self, data: Dict[str, Any], project_id: Optional[str] = None, jwt_token: Optional[str] = None) -> Dict[str, Any]:
+        """Create new data"""
+        # Handle UUID serialization if needed
+        serializable_data = json.loads(json.dumps(data, default=str))
         
-    async def create_data(self, data: Dict[str, Any], jwt_token: Optional[str] = None) -> Dict[str, Any]:
-        """Create a new data"""
-        serializable_data = self._convert_uuids_to_strings(data)
+        params = {}
+        if project_id:
+            params["project_id"] = project_id
         
         response = await self._request(
             "POST",
             f"{self.base_url}/internal/data",
             headers=self._get_headers(jwt_token),
-            json=serializable_data
+            json=serializable_data,
+            params=params
         )
         response.raise_for_status()
         return response.json()
-        
+
     async def update_data(self, data_id: str, data: Dict[str, Any], jwt_token: Optional[str] = None) -> Dict[str, Any]:
-        """Update an existing data"""
-        serializable_data = self._convert_uuids_to_strings(data)
+        """Update a data by ID"""
+        # Handle UUID serialization if needed
+        serializable_data = json.loads(json.dumps(data, default=str))
         
         response = await self._request(
             "PUT",
@@ -291,3 +299,132 @@ class StorageClient:
         )
         response.raise_for_status()
         return response.json()
+
+    # Projects operations
+    async def create_project(self, project_data: Dict[str, Any], jwt_token: Optional[str] = None) -> Dict[str, Any]:
+        """Create a new project"""
+        response = await self._request(
+            "POST",
+            f"{self.base_url}/internal/projects",
+            headers=self._get_headers(jwt_token),
+            json=project_data
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def list_projects_for_user(self, user_id: int, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List projects for a user"""
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/internal/projects/user/{user_id}",
+            headers=self._get_headers(jwt_token)
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def get_project(self, project_id: str, jwt_token: Optional[str] = None) -> Dict[str, Any]:
+        """Get project details"""
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/internal/projects/{project_id}",
+            headers=self._get_headers(jwt_token)
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def update_project(self, project_id: str, name: str, jwt_token: Optional[str] = None) -> Dict[str, Any]:
+        """Update project details"""
+        response = await self._request(
+            "PUT",
+            f"{self.base_url}/internal/projects/{project_id}",
+            headers=self._get_headers(jwt_token),
+            json={"name": name}
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def delete_project(self, project_id: str, jwt_token: Optional[str] = None) -> None:
+        """Delete a project"""
+        response = await self._request(
+            "DELETE",
+            f"{self.base_url}/internal/projects/{project_id}",
+            headers=self._get_headers(jwt_token)
+        )
+        response.raise_for_status()
+
+    async def add_member(self, project_id: str, member_data: Dict[str, Any], jwt_token: Optional[str] = None) -> Dict[str, Any]:
+        """Add member to project"""
+        response = await self._request(
+            "POST",
+            f"{self.base_url}/internal/projects/{project_id}/members",
+            headers=self._get_headers(jwt_token),
+            json=member_data
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def remove_member(self, project_id: str, user_id: int, jwt_token: Optional[str] = None) -> None:
+        """Remove member from project"""
+        response = await self._request(
+            "DELETE",
+            f"{self.base_url}/internal/projects/{project_id}/members/{user_id}",
+            headers=self._get_headers(jwt_token)
+        )
+        response.raise_for_status()
+
+    async def get_members(self, project_id: str, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List project members"""
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/internal/projects/{project_id}/members",
+            headers=self._get_headers(jwt_token)
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def is_member(self, project_id: str, user_id: int, jwt_token: Optional[str] = None) -> bool:
+        """Check if user is a member of the project"""
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/internal/projects/{project_id}/members/{user_id}/check",
+            headers=self._get_headers(jwt_token)
+        )
+        response.raise_for_status()
+        return response.json().get("is_member", False)
+
+    async def list_data_for_project(self, project_id: str, data_type: Optional[str] = None, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List data for a project"""
+        params = {"data_type": data_type} if data_type else {}
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/internal/data/project/{project_id}",
+            headers=self._get_headers(jwt_token),
+            params=params
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def get_data_for_project(self, project_id: str, data_id: str, jwt_token: Optional[str] = None) -> Dict[str, Any]:
+        """Get specific data for a project"""
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/internal/data/project/{project_id}/{data_id}",
+            headers=self._get_headers(jwt_token)
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def get_member_role(self, project_id: str, user_id: int, jwt_token: Optional[str] = None) -> Optional[str]:
+        """Get user's role in the project"""
+        try:
+            response = await self._request(
+                "GET",
+                f"{self.base_url}/internal/projects/{project_id}/members/{user_id}/role",
+                headers=self._get_headers(jwt_token)
+            )
+            response.raise_for_status()
+            return response.json().get("role")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return None
+            raise

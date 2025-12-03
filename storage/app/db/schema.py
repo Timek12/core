@@ -2,15 +2,33 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, Boolean, DateTime,
-    TIMESTAMP, Index, inspect
+    TIMESTAMP, Index, inspect, ForeignKey
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.sql import text
-from sqlalchemy.orm import declarative_base, Session
+from sqlalchemy.orm import declarative_base, Session, relationship
 
 from app.db.db import create_database_url
 
 Base = declarative_base()
+
+class Project(Base):
+    """Projects table"""
+    __tablename__ = 'projects'
+    
+    id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(256), nullable=False)
+    created_by = Column(Integer, nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+class ProjectMember(Base):
+    """Project members table"""
+    __tablename__ = 'project_members'
+    
+    project_id = Column(PGUUID(as_uuid=True), ForeignKey('projects.id'), primary_key=True)
+    user_id = Column(Integer, primary_key=True)
+    role = Column(String(50), nullable=False, default='member')
+    joined_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 class Data(Base):
     """Data table (used by server service)"""
@@ -22,16 +40,12 @@ class Data(Base):
     description = Column(Text, nullable=False)
     
     # Typed data support
-    data_type = Column(String(50), nullable=False, default='text_with_ttl')  # text_with_ttl, kubernetes, credentials, api_key, ssh_key, certificate
+    data_type = Column(String(50), nullable=False, default='text')  # text, kubernetes, credentials, api_key, ssh_key, certificate
     metadata_json = Column(Text, nullable=True)  # Unencrypted metadata for filtering/searching
     
     # Encryption
     dek_id = Column(PGUUID(as_uuid=True), nullable=False)  # Data Encryption Key reference
     encrypted_value = Column(Text, nullable=False)  # JSON structure, encrypted
-    
-    # TTL support
-    ttl_seconds = Column(Integer, nullable=True)  # Time to live in seconds
-    expires_at = Column(TIMESTAMP(timezone=True), nullable=True)  # Calculated expiration time
     
     # Standard fields
     version = Column(Integer, nullable=False, default=1)
@@ -39,13 +53,16 @@ class Data(Base):
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     
+    # Project support
+    project_id = Column(PGUUID(as_uuid=True), ForeignKey('projects.id'), nullable=True)
+    
     __table_args__ = (
         Index('idx_data_name', 'name'),
         Index('idx_data_dek_id', 'dek_id'),
         Index('idx_data_user_id', 'user_id'),
         Index('idx_data_is_active', 'is_active'),
         Index('idx_data_type', 'data_type'),
-        Index('idx_data_expires_at', 'expires_at'),
+        Index('idx_data_project_id', 'project_id'),
     )
 
 class EncryptionKeys(Base):
@@ -114,10 +131,12 @@ def schema_exists(engine) -> bool:
     existing_tables = inspector.get_table_names()
 
     # Define required tables for this service
-    required_tables = {'data', 'encryption_keys', 'data_encryption_keys', 'server_status', 'audit_logs'}
+    required_tables = {'data', 'encryption_keys', 'data_encryption_keys', 'server_status', 'audit_logs', 'projects', 'project_members'}
 
     # Check if all required tables exist
     return required_tables.issubset(set(existing_tables))
+
+
 
 def provision_schema():
     """Provision the database schema using SQLAlchemy with retry logic"""
@@ -185,7 +204,7 @@ def provision_schema():
                     # Create all tables
                     Base.metadata.create_all(engine)
                     
-                    logger.info("Schema provisioned sucessfully")
+                    logger.info("Schema provisioned successfully")
                     return True
                 
                 finally:

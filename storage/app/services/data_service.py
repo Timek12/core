@@ -1,12 +1,12 @@
 ﻿from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import uuid
 
 from app.repositories.data_repository import DataRepository
 from app.dto.data import DataInternalCreate, DataInternalUpdate
-from app.utils.typed_data_helpers import parse_metadata_json, is_expired
+from app.utils.typed_data_helpers import parse_metadata_json
 
 
 class DataService:
@@ -28,14 +28,6 @@ class DataService:
         return value.isoformat()
 
     @staticmethod
-    def _compute_expiration(ttl_seconds: Optional[int], expires_at: Optional[datetime]) -> Optional[datetime]:
-        if expires_at is not None:
-            return expires_at
-        if ttl_seconds and ttl_seconds > 0:
-            return datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
-        return None
-
-    @staticmethod
     def _serialize(data_item) -> Dict[str, Any]:
         return {
             "id": str(data_item.id),
@@ -45,31 +37,39 @@ class DataService:
             "data_type": data_item.data_type,
             "metadata": parse_metadata_json(data_item.metadata_json),
             "metadata_json": data_item.metadata_json,
-            "ttl_seconds": data_item.ttl_seconds,
-            "expires_at": DataService._iso_datetime(data_item.expires_at),
             "version": data_item.version if data_item.version is not None else 1,
             "is_active": data_item.is_active,
             "created_at": DataService._iso_datetime(data_item.created_at),
             "updated_at": DataService._iso_datetime(data_item.updated_at),
             "encrypted_value": data_item.encrypted_value,
             "dek_id": str(data_item.dek_id),
+            "project_id": str(data_item.project_id) if data_item.project_id else None,
         }
 
-    def create_data(self, user_id: int, payload: DataInternalCreate) -> Dict[str, Any]:
-        expires_at = self._compute_expiration(payload.ttl_seconds, payload.expires_at)
-        create_payload = payload.copy(update={"expires_at": expires_at})
-        data_item = self.repository.create_data(user_id, create_payload)
+    def create_data(self, user_id: int, payload: DataInternalCreate, project_id: Optional[uuid.UUID] = None) -> Dict[str, Any]:
+        data_item = self.repository.create_data(user_id, payload, project_id)
         return self._serialize(data_item)
 
-    def get_data(self, data_id: uuid.UUID, user_id: int) -> Optional[Dict[str, Any]]:
-        data_item = self.repository.get_data_for_user(data_id, user_id)
-        if not data_item or is_expired(data_item.expires_at):
+    def get_data(self, data_id: uuid.UUID, user_id: int) -> Optional[Dict]:
+        """Retrieve a data item (encrypted)."""
+        data_item = self.repository.get_accessible_data(data_id, user_id)
+        if not data_item:
             return None
         return self._serialize(data_item)
 
     def list_data(self, user_id: int, data_type: Optional[str] = None) -> List[Dict[str, Any]]:
         data_list = self.repository.list_data_for_user(user_id, data_type)
-        return [self._serialize(data_item) for data_item in data_list if not is_expired(data_item.expires_at)]
+        return [self._serialize(data_item) for data_item in data_list]
+
+    def list_data_for_project(self, project_id: uuid.UUID, data_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        data_list = self.repository.list_data_for_project(project_id, data_type)
+        return [self._serialize(data_item) for data_item in data_list]
+
+    def get_data_for_project(self, data_id: uuid.UUID, project_id: uuid.UUID) -> Optional[Dict[str, Any]]:
+        data_item = self.repository.get_data_for_project(data_id, project_id)
+        if not data_item:
+            return None
+        return self._serialize(data_item)
 
     def update_data(
         self,
@@ -77,17 +77,15 @@ class DataService:
         user_id: int,
         payload: DataInternalUpdate,
     ) -> Optional[Dict[str, Any]]:
-        data_item = self.repository.get_data_for_user(data_id, user_id)
+        data_item = self.repository.get_accessible_data(data_id, user_id)
         if not data_item:
             return None
 
-        expires_at = self._compute_expiration(payload.ttl_seconds, payload.expires_at)
-        update_payload = payload.copy(update={"expires_at": expires_at})
-        updated = self.repository.update_data(data_item, update_payload)
+        updated = self.repository.update_data(data_item, payload)
         return self._serialize(updated)
 
     def delete_data(self, data_id: uuid.UUID, user_id: int) -> bool:
-        data_item = self.repository.get_data_for_user(data_id, user_id)
+        data_item = self.repository.get_accessible_data(data_id, user_id)
         if not data_item:
             return False
         self.repository.delete_data_for_user(data_item)
