@@ -23,43 +23,20 @@ class Users(Base):
     __tablename__ = 'users'
     
     user_id = Column(Integer, primary_key=True, autoincrement=True)
-    provider_user_id = Column(String(255), nullable=True)
     email = Column(String(255), unique=True, nullable=False)
     name = Column(String(255), nullable=True)
-    avatar_url = Column(Text, nullable=True)
-    auth_method = Column(String(50), nullable=False, default='oauth')
-    provider = Column(String(50), nullable=False, default='local')
     password_hash = Column(String(255), nullable=True)
-    email_verified = Column(Boolean, default=False)
     role = Column(Enum(UserRole, name='user_role', native_enum=False), default=UserRole.USER, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     
     __table_args__ = (
-        UniqueConstraint('provider_user_id', 'provider', name='uq_users_provider_user_id'),
         Index('idx_users_email', 'email'),
-        Index('idx_users_provider_user_id', 'provider', 'provider_user_id'),
         Index('idx_users_role', 'role'),
     )
 
-class OAuthRefreshTokens(Base):
-    """OAuth refresh tokens table (for storing external OAuth tokens)"""
-    __tablename__ = 'oauth_refresh_tokens'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
-    provider = Column(String(50), nullable=False)
-    refresh_token = Column(Text, nullable=False)
-    token_expires_at = Column(TIMESTAMP(timezone=True), nullable=True)
-    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
-    
-    __table_args__ = (
-        UniqueConstraint('user_id', 'provider', name='uq_oauth_tokens_user_provider'),
-        Index('idx_oauth_tokens_user_provider', 'user_id', 'provider'),
-    )
-
 class JWTRefreshTokens(Base):
-    """JWT refresh tokens table (for internal JWT token management)"""
+    """JWT refresh tokens table"""
     __tablename__ = 'jwt_refresh_tokens'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -90,25 +67,13 @@ def schema_exists(engine) -> bool:
     existing_tables = inspector.get_table_names()
 
     # Define required tables for this service
-    required_tables = {'users', 'oauth_refresh_tokens', 'jwt_refresh_tokens'}
+    required_tables = {'users', 'jwt_refresh_tokens'}
 
     # Check if all required tables exist
     return required_tables.issubset(set(existing_tables))
 
 def provision_schema():
-    """
-    Provision the database schema using SQLAlchemy with retry logic and replica safety.
-    
-    Uses PostgreSQL advisory locks to prevent race conditions when multiple replicas
-    start simultaneously.
-    
-    Flow:
-    1. Try to connect to database (with retries)
-    2. Acquire advisory lock (blocking - waits for other replicas)
-    3. Check if schema exists
-    4. If not exists, create schema
-    5. Release advisory lock
-    """
+    """Provision DB schema using SQLAlchemy with retry logic and PostgreSQL advisory locks for replica safety."""
     import os
     import logging
     import time

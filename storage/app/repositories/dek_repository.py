@@ -2,35 +2,37 @@ from typing import List, Optional
 import uuid
 from sqlalchemy.orm import Session
 
-from app.db.schema import DataEncryptionKeys
+from app.db.schema import EncryptionKeys
 
 
 class DEKRepository:
-    """Repository for DEK operations"""
+    """Repository for DEK operations using EncryptionKeys table"""
 
     def __init__(self, db: Session):
         self.db = db
 
-    def find_by_id(self, dek_id: uuid.UUID) -> Optional[DataEncryptionKeys]:
+    def find_by_id(self, dek_id: uuid.UUID) -> Optional[EncryptionKeys]:
         """Find DEK by ID"""
-        return self.db.query(DataEncryptionKeys).filter(
-            DataEncryptionKeys.id == dek_id
+        return self.db.query(EncryptionKeys).filter(
+            EncryptionKeys.id == dek_id,
+            EncryptionKeys.key_type == 'dek'
         ).first()
 
-    def find_all_active(self) -> List[DataEncryptionKeys]:
+    def find_all_active(self) -> List[EncryptionKeys]:
         """Find all active DEKs"""
-        return self.db.query(DataEncryptionKeys).filter(
-            DataEncryptionKeys.is_active == True
-        ).order_by(DataEncryptionKeys.created_at.desc()).all()
+        return self.db.query(EncryptionKeys).filter(
+            EncryptionKeys.key_type == 'dek',
+            EncryptionKeys.status == 'active'
+        ).order_by(EncryptionKeys.created_at.desc()).all()
 
-    def save(self, dek: DataEncryptionKeys) -> DataEncryptionKeys:
+    def save(self, dek: EncryptionKeys) -> EncryptionKeys:
         """Save a new DEK"""
         self.db.add(dek)
         self.db.commit()
         self.db.refresh(dek)
         return dek
 
-    def update(self, dek: DataEncryptionKeys) -> DataEncryptionKeys:
+    def update(self, dek: EncryptionKeys) -> EncryptionKeys:
         """Update an existing DEK"""
         self.db.commit()
         self.db.refresh(dek)
@@ -42,6 +44,6 @@ class DEKRepository:
         if not dek:
             return False
         
-        dek.is_active = False
+        dek.status = 'rotated'
         self.db.commit()
         return True

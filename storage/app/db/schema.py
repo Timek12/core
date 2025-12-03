@@ -44,7 +44,7 @@ class Data(Base):
     metadata_json = Column(Text, nullable=True)  # Unencrypted metadata for filtering/searching
     
     # Encryption
-    dek_id = Column(PGUUID(as_uuid=True), nullable=False)  # Data Encryption Key reference
+    dek_id = Column(PGUUID(as_uuid=True), nullable=False)  # EncryptionKeys reference (key_type='dek')
     encrypted_value = Column(Text, nullable=False)  # JSON structure, encrypted
     
     # Standard fields
@@ -78,21 +78,7 @@ class EncryptionKeys(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-class DataEncryptionKeys(Base):
-    """Data Encryption Keys table (DEKs encrypted with master key)"""
-    __tablename__ = 'data_encryption_keys'
-    
-    id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    encrypted_dek = Column(Text, nullable=False)  # DEK encrypted with master key
-    nonce = Column(Text, nullable=False)  # Nonce used for DEK encryption
-    version = Column(Integer, nullable=False, default=1)
-    is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
-    rotated_at = Column(TIMESTAMP(timezone=True), nullable=True)
-    
-    __table_args__ = (
-        Index('idx_dek_is_active', 'is_active'),
-    )
+
 
 class ServerStatus(Base):
     """Server status table (for server state management)"""
@@ -131,7 +117,7 @@ def schema_exists(engine) -> bool:
     existing_tables = inspector.get_table_names()
 
     # Define required tables for this service
-    required_tables = {'data', 'encryption_keys', 'data_encryption_keys', 'server_status', 'audit_logs', 'projects', 'project_members'}
+    required_tables = {'data', 'encryption_keys', 'server_status', 'audit_logs', 'projects', 'project_members'}
 
     # Check if all required tables exist
     return required_tables.issubset(set(existing_tables))
