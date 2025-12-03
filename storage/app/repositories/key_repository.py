@@ -20,13 +20,6 @@ class KeyRepository:
             EncryptionKeys.status == 'active'
         ).order_by(EncryptionKeys.id.desc()).first()
     
-    def find_all_active(self, key_type: Optional[str] = None) -> List[EncryptionKeys]:
-        """Find all active EncryptionKeys, optionally filtered by type."""
-        query = self.db.query(EncryptionKeys).filter(EncryptionKeys.status == 'active')
-        if key_type:
-            query = query.filter(EncryptionKeys.key_type == key_type)
-        return query.order_by(EncryptionKeys.created_at.desc()).all()
-    
     def save(self, key: EncryptionKeys) -> EncryptionKeys:
         """Save a new key."""
         self.db.add(key)
@@ -39,4 +32,3 @@ class KeyRepository:
         self.db.commit()
         self.db.refresh(key)
         return key
-    

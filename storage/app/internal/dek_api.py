@@ -58,16 +58,4 @@ def get_dek(dek_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
         )
 
 
-@router.get("")
-def list_active_deks(db: Session = Depends(get_db)):
-    """List all active DEKs"""
-    try:
-        service = DEKService(db)
-        deks = service.get_all_active_deks()
-        
-        return [format_dek_response(dek, include_encrypted=False) for dek in deks]
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list DEKs: {str(e)}"
-        )
+

@@ -19,9 +19,7 @@ class KeyService:
         key = self.repository.find_by_type(key_type)
         return KeyResponse.from_orm(key) if key else None
     
-    def get_all_active_keys(self, key_type: Optional[str] = None) -> List[KeyResponse]:
-        keys = self.repository.find_all_active(key_type)
-        return [KeyResponse.from_orm(key) for key in keys]
+
     
     def create_key(self, key_data: KeyCreate) -> KeyResponse:
         key = EncryptionKeys(

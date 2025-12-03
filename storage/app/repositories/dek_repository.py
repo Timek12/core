@@ -18,12 +18,7 @@ class DEKRepository:
             EncryptionKeys.key_type == 'dek'
         ).first()
 
-    def find_all_active(self) -> List[EncryptionKeys]:
-        """Find all active DEKs"""
-        return self.db.query(EncryptionKeys).filter(
-            EncryptionKeys.key_type == 'dek',
-            EncryptionKeys.status == 'active'
-        ).order_by(EncryptionKeys.created_at.desc()).all()
+
 
     def save(self, dek: EncryptionKeys) -> EncryptionKeys:
         """Save a new DEK"""

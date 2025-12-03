@@ -46,15 +46,6 @@ def get_key_by_type(
     
     return key
 
-@router.get("", response_model=List[KeyResponse])
-def get_all_active_keys(
-    key_type: Optional[str] = Query(None), 
-    db: Session = Depends(get_db),
-    _: UserInfo = Depends(get_current_user)
-):
-    """Get all active keys - requires authentication"""
-    service = KeyService(db)
-    return service.get_all_active_keys(key_type)
 
 @router.post("", response_model=KeyResponse, status_code=status.HTTP_201_CREATED)
 def create_key(

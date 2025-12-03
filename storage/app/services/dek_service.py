@@ -49,6 +49,4 @@ class DEKService:
         
         return self.repository.save(new_dek)
 
-    def get_all_active_deks(self):
-        """Get all active DEKs"""
-        return self.repository.find_all_active()
+

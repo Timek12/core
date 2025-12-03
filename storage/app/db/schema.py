@@ -78,8 +78,6 @@ class EncryptionKeys(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-
-
 class ServerStatus(Base):
     """Server status table (for server state management)"""
     __tablename__ = 'server_status'
@@ -121,8 +119,6 @@ def schema_exists(engine) -> bool:
 
     # Check if all required tables exist
     return required_tables.issubset(set(existing_tables))
-
-
 
 def provision_schema():
     """Provision the database schema using SQLAlchemy with retry logic"""
