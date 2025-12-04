@@ -106,19 +106,6 @@ class StorageClient:
         response.raise_for_status()
         return True 
         
-    async def get_all_keys(self, key_type: Optional[str] = None, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get all active keys, optionally filtered by type"""
-        params = {"key_type": key_type} if key_type else {}
-        
-        response = await self._request(
-            "GET",
-            f"{self.base_url}/internal/keys",
-            headers=self._get_headers(jwt_token),
-            params=params
-        )
-        response.raise_for_status()
-        return response.json()
-    
     async def get_key_by_id(self, key_id: uuid.UUID, jwt_token: Optional[str] = None) -> Dict[str, Any]:
         """Get a specific key by ID"""
         response = await self._request(

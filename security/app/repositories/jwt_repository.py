@@ -44,19 +44,6 @@ class JWTTokenRepository:
             JWTRefreshTokens.expires_at > now
         ).order_by(JWTRefreshTokens.created_at.desc()).all()
     
-    def find_expired_tokens(self) -> List[JWTRefreshTokens]:
-        """Find all expired JWT tokens."""
-        now = datetime.now(timezone.utc)
-        return self.db.query(JWTRefreshTokens).filter(
-            JWTRefreshTokens.expires_at < now
-        ).all()
-    
-    def find_revoked_tokens(self) -> List[JWTRefreshTokens]:
-        """Find all revoked JWT tokens."""
-        return self.db.query(JWTRefreshTokens).filter(
-            JWTRefreshTokens.revoked == True
-        ).all()
-    
     def is_token_valid(self, jti: uuid.UUID) -> bool:
         """Check if token is valid (exists, not revoked, not expired)."""
         now = datetime.now(timezone.utc)
@@ -84,53 +71,3 @@ class JWTTokenRepository:
         """Delete a JWT token."""
         self.db.delete(token)
         self.db.commit()
-    
-    def revoke_token(self, jti: uuid.UUID) -> bool:
-        """Revoke a JWT token by JTI."""
-        token = self.find_by_jti(jti)
-        if token and not token.revoked:
-            token.revoked = True
-            token.revoked_at = datetime.now(timezone.utc)
-            self.update(token)
-            return True
-        return False
-    
-    def revoke_all_user_tokens(self, user_id: int) -> int:
-        """Revoke all active tokens for a user. Returns count of revoked tokens."""
-        now = datetime.now(timezone.utc)
-        tokens = self.find_active_by_user_id(user_id)
-        count = 0
-        for token in tokens:
-            token.revoked = True
-            token.revoked_at = now
-            count += 1
-        if count > 0:
-            self.db.commit()
-        return count
-    
-    def delete_expired_tokens(self) -> int:
-        """Delete all expired tokens. Returns count of deleted tokens."""
-        expired_tokens = self.find_expired_tokens()
-        count = len(expired_tokens)
-        for token in expired_tokens:
-            self.db.delete(token)
-        if count > 0:
-            self.db.commit()
-        return count
-    
-    def delete_revoked_tokens_older_than(self, days: int) -> int:
-        """Delete revoked tokens older than specified days. Returns count of deleted tokens."""
-        from datetime import timedelta
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
-        
-        tokens = self.db.query(JWTRefreshTokens).filter(
-            JWTRefreshTokens.revoked == True,
-            JWTRefreshTokens.revoked_at < cutoff_date
-        ).all()
-        
-        count = len(tokens)
-        for token in tokens:
-            self.db.delete(token)
-        if count > 0:
-            self.db.commit()
-        return count

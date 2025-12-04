@@ -19,8 +19,6 @@ class KeyService:
         key = self.repository.find_by_type(key_type)
         return KeyResponse.from_orm(key) if key else None
     
-
-    
     def create_key(self, key_data: KeyCreate) -> KeyResponse:
         key = EncryptionKeys(
             key_type=key_data.key_type,

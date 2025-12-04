@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
+import httpx
 from app.clients.storage_client import StorageClient
 from app.utils.redis_state import RedisStateManager
 
@@ -133,10 +134,12 @@ class CryptoService:
         root_key_data = await self.storage_client.get_key_by_id(storage_id, jwt_token)
     
         # Get Master Key info
-        master_keys = await self.storage_client.get_all_keys(key_type="master", jwt_token=jwt_token)
-        if not master_keys:
-            raise ValueError("Master key not found")
-        master_key_data = master_keys[0]
+        try:
+            master_key_data = await self.storage_client.get_key_by_type(key_type="master", jwt_token=jwt_token)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise ValueError("Master key not found")
+            raise e
 
         # Derive KEK
         salt = bytes.fromhex(root_key_info["salt"])

@@ -1,9 +1,8 @@
-from typing import List, Optional
+from typing import Optional
 import uuid
 from sqlalchemy.orm import Session
 
 from app.db.schema import EncryptionKeys
-
 
 class DEKRepository:
     """Repository for DEK operations using EncryptionKeys table"""
@@ -17,8 +16,6 @@ class DEKRepository:
             EncryptionKeys.id == dek_id,
             EncryptionKeys.key_type == 'dek'
         ).first()
-
-
 
     def save(self, dek: EncryptionKeys) -> EncryptionKeys:
         """Save a new DEK"""

@@ -2,6 +2,7 @@ from typing import List, Dict, Optional
 import os
 import json
 import logging
+import httpx
 
 from app.clients.storage_client import StorageClient
 from app.utils.redis_state import RedisStateManager
@@ -109,12 +110,13 @@ class DataService:
         dek_record = await self.storage_client.create_dek(dek_data, jwt_token)
         
         # Step 7: Get master key ID from storage (now returns UUID)
-        master_keys = await self.storage_client.get_all_keys(key_type="master", jwt_token=jwt_token)
-        if not master_keys or len(master_keys) == 0:
-            raise ValueError("Master key not found in storage")
-        
-        # Keep as UUID string
-        master_key_id = master_keys[0]["id"]
+        try:
+            master_key_data = await self.storage_client.get_key_by_type(key_type="master", jwt_token=jwt_token)
+            master_key_id = master_key_data["id"]
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise ValueError("Master key not found in storage")
+            raise e
         
         # Step 8: Store the data with reference to the DEK
         storage_data = {
