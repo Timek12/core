@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-
 def create_database_url():
     """Create PostgreSQL database URL from environment variables."""
     db_host = os.getenv('DB_HOST', 'localhost')

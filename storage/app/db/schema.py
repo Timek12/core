@@ -53,7 +53,6 @@ class Data(Base):
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     
-    # Project support
     project_id = Column(PGUUID(as_uuid=True), ForeignKey('projects.id'), nullable=True)
     
     __table_args__ = (
@@ -79,7 +78,7 @@ class EncryptionKeys(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class ServerStatus(Base):
-    """Server status table (for server state management)"""
+    """Server status table"""
     __tablename__ = 'server_status'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -92,7 +91,7 @@ class AuditLog(Base):
     
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     action = Column(String(100), nullable=False)  # e.g., 'login', 'create_secret', 'unseal'
-    user_id = Column(String(255), nullable=True)  # Nullable because some actions might be pre-auth or system
+    user_id = Column(String(255), nullable=True) 
     resource_id = Column(String(255), nullable=True)  # ID of the affected resource
     resource_type = Column(String(50), nullable=True)  # e.g., 'secret', 'user', 'vault'
     status = Column(String(20), nullable=False)  # 'success', 'failure'

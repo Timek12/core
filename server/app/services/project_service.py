@@ -2,14 +2,16 @@ from typing import List, Dict, Any
 import logging
 
 from app.clients.storage_client import StorageClient
+from app.clients.security_client import SecurityClient
 from app.utils.redis_state import RedisStateManager
 
 logger = logging.getLogger(__name__)
 
 class ProjectService:
-    def __init__(self, storage_client: StorageClient = None, state_manager: RedisStateManager = None):
+    def __init__(self, storage_client: StorageClient = None, state_manager: RedisStateManager = None, security_client: SecurityClient = None):
         self.storage_client = storage_client or StorageClient()
         self.state_manager = state_manager
+        self.security_client = security_client or SecurityClient()
 
     async def create_project(self, name: str, jwt_token: str) -> Dict[str, Any]:
         """Create a new project"""
@@ -30,6 +32,13 @@ class ProjectService:
 
     async def add_member(self, project_id: str, user_id: int, role: str, jwt_token: str) -> Dict[str, Any]:
         """Add member to project"""
+        # Validate user exists
+        try:
+            await self.security_client.get_user_public(user_id, jwt_token)
+        except Exception as e:
+            logger.error(f"Failed to validate user {user_id}: {e}")
+            raise ValueError(f"User with ID {user_id} does not exist or cannot be accessed")
+
         logger.info(f"Adding user {user_id} to project {project_id} with role {role}")
         return await self.storage_client.add_member(
             project_id, 

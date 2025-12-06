@@ -1,9 +1,14 @@
 from fastapi import Request
 from app.clients.storage_client import StorageClient
+from app.clients.security_client import SecurityClient
 
 def get_storage_client(request: Request) -> StorageClient:
     """Dependency to get StorageClient with shared HTTP client"""
     return StorageClient(client=request.app.state.http_client)
+
+def get_security_client(request: Request) -> SecurityClient:
+    """Dependency to get SecurityClient with shared HTTP client"""
+    return SecurityClient(client=request.app.state.http_client)
 
 def get_client_info(request: Request) -> tuple[str, str]:
     """Extract device info and IP address from request."""

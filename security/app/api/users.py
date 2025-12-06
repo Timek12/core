@@ -16,6 +16,23 @@ def get_current_user_info(current_user: Annotated[UserResponse, Depends(get_curr
     return UserPublic.from_orm(current_user)
 
 
+@router.get("/{user_id}/public", response_model=UserPublic)
+def get_user_public(
+    user_id: int,
+    current_user: Annotated[UserResponse, Depends(get_current_user)],
+    db: Session = Depends(get_db)
+):
+    """Get public user info by ID (accessible to all authenticated users)."""
+    auth_service = AuthService(db)
+    user = auth_service.user_repo.find_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID {user_id} not found"
+        )
+    return UserPublic.from_orm(user)
+
+
 # Admin-only endpoints
 
 @router.get("/admin/users", response_model=list[UserResponse])
