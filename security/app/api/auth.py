@@ -5,12 +5,13 @@ from sqlalchemy.orm import Session
 
 from app.db.db import get_db
 from app.services.auth_service import AuthService
-from app.dto.user import UserCreate, UserPublic, LoginRequest
+from app.dto.user import UserCreate, UserPublic, LoginRequest, UserResponse
 from app.dto.token import (
     TokenPair, LoginResponse, RefreshTokenRequest, 
-    RefreshTokenResponse, TokenVerificationResponse
+    RefreshTokenResponse, TokenVerificationResponse,
+    RevokeTokenRequest, MessageResponse
 )
-from app.dependencies import get_client_info, oauth2_scheme, get_audit_logger
+from app.dependencies import get_client_info, oauth2_scheme, get_audit_logger, get_current_user
 from app.clients.audit_logger import RedisAuditLogger
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -252,3 +253,39 @@ def verify_token(
         email=payload.get("email"),
         expires_at=payload.get("exp")
     )
+
+
+@router.post("/logout", response_model=MessageResponse)
+def logout(
+    revoke_request: RevokeTokenRequest, 
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user: Annotated[UserResponse, Depends(get_current_user)], 
+    db: Session = Depends(get_db),
+    audit_logger: RedisAuditLogger = Depends(get_audit_logger)
+):
+    """Logout by revoking refresh token."""
+
+    auth_service = AuthService(db)
+
+    success = auth_service.revoke_token(revoke_request.token)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token or already revoked"
+        )
+    
+    # Audit Log
+    device_info, ip_address = get_client_info(request)
+    background_tasks.add_task(
+        audit_logger.log_event,
+        action="logout",
+        status="success",
+        user_id=str(current_user.user_id),
+        resource_type="session",
+        ip_address=ip_address,
+        user_agent=device_info,
+        details="User logged out"
+    )
+
+    return MessageResponse(message="Successfully logged out")

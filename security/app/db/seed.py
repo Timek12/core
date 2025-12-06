@@ -1,6 +1,3 @@
-"""
-Database seeding utilities for initial data
-"""
 import logging
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
@@ -15,21 +12,12 @@ password_hash = PasswordHash.recommended()
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using pwdlib (same as auth service)"""
+    """Hash a password using pwdlib"""
     return password_hash.hash(password)
 
 
 def seed_initial_users(session: Session) -> bool:
-    """
-    Seed initial users into the database.
-    This runs only once when the database is first provisioned.
-    
-    Args:
-        session: SQLAlchemy database session
-        
-    Returns:
-        bool: True if seeding was successful, False otherwise
-    """
+    """Seed initial users into the database."""
     try:
         # Check if any users already exist
         existing_users_count = session.query(Users).count()
@@ -43,31 +31,31 @@ def seed_initial_users(session: Session) -> bool:
         # Define initial users
         initial_users = [
             {
-                "email": "user@gmail.com",
+                "email": "user1@gmail.com",
                 "password": "User123@",
                 "name": "Regular User",
                 "role": UserRole.USER
             },
             {
-                "email": "user1@example.com",
+                "email": "user2@example.com",
                 "password": "User123@",
                 "name": "User One",
                 "role": UserRole.USER
             },
             {
-                "email": "user2@example.com",
+                "email": "user3@example.com",
                 "password": "User123@",
                 "name": "User Two",
                 "role": UserRole.USER
             },
             {
-                "email": "user3@example.com",
+                "email": "user4@example.com",
                 "password": "User123@",
                 "name": "User Three",
                 "role": UserRole.USER
             },
             {
-                "email": "user4@example.com",
+                "email": "user5@example.com",
                 "password": "User123@",
                 "name": "User Four",
                 "role": UserRole.USER
@@ -108,11 +96,6 @@ def seed_initial_users(session: Session) -> bool:
         session.commit()
         
         logger.info(f"Successfully seeded {created_count} initial users")
-        logger.info("   Login credentials:")
-        logger.info("   Regular users: user@gmail.com, user1-4@example.com")
-        logger.info("   Password: User123@")
-        logger.info("   Admins: admin@luna.com, admin2@luna.com")
-        logger.info("   Password: Admin123@")
         
         return True
         
