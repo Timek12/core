@@ -21,21 +21,6 @@ class UserRepository:
         """Find user by email."""
         return self.db.query(Users).filter(Users.email == email).first()
     
-    def find_by_provider_user_id(self, provider: str, provider_user_id: str) -> Optional[Users]:
-        """Find user by provider and provider_user_id."""
-        return self.db.query(Users).filter(
-            Users.provider == provider,
-            Users.provider_user_id == provider_user_id
-        ).first()
-    
-    def find_by_auth_method(self, auth_method: str) -> List[Users]:
-        """Find all users by authentication method."""
-        return self.db.query(Users).filter(Users.auth_method == auth_method).all()
-    
-    def find_verified_users(self) -> List[Users]:
-        """Find all verified users."""
-        return self.db.query(Users).filter(Users.email_verified == True).all()
-    
     def save(self, user: Users) -> Users:
         """Save a new user."""
         self.db.add(user)
@@ -57,10 +42,3 @@ class UserRepository:
     def exists_by_email(self, email: str) -> bool:
         """Check if user exists by email."""
         return self.db.query(Users).filter(Users.email == email).first() is not None
-    
-    def exists_by_provider(self, provider: str, provider_user_id: str) -> bool:
-        """Check if user exists by provider credentials."""
-        return self.db.query(Users).filter(
-            Users.provider == provider,
-            Users.provider_user_id == provider_user_id
-        ).first() is not None

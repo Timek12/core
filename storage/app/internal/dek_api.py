@@ -6,13 +6,14 @@ from typing import Dict, Any
 from app.db.db import get_db
 from app.services.dek_service import DEKService
 from app.utils.dek_helpers import format_dek_response
+from app.utils.jwt_utils import get_current_user, UserInfo
 
 
 router = APIRouter(prefix="/internal/deks", tags=["deks"])
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def create_dek(dek_data: Dict[str, Any], db: Session = Depends(get_db)) -> Dict[str, Any]:
+def create_dek(dek_data: Dict[str, Any], db: Session = Depends(get_db), current_user: UserInfo = Depends(get_current_user)) -> Dict[str, Any]:
     """Create a new Data Encryption Key (already encrypted with KEK)"""
     try:
         service = DEKService(db)
@@ -31,7 +32,7 @@ def create_dek(dek_data: Dict[str, Any], db: Session = Depends(get_db)) -> Dict[
 
 
 @router.get("/{dek_id}")
-def get_dek(dek_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def get_dek(dek_id: str, db: Session = Depends(get_db), current_user: UserInfo = Depends(get_current_user)) -> Dict[str, Any]:
     """Get a Data Encryption Key by ID"""
     try:
         service = DEKService(db)

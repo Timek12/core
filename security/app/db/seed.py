@@ -46,57 +46,43 @@ def seed_initial_users(session: Session) -> bool:
                 "email": "user@gmail.com",
                 "password": "User123@",
                 "name": "Regular User",
-                "role": UserRole.USER,
-                "auth_method": "local",
-                "provider": "local"
+                "role": UserRole.USER
             },
             {
                 "email": "user1@example.com",
                 "password": "User123@",
                 "name": "User One",
-                "role": UserRole.USER,
-                "auth_method": "local",
-                "provider": "local"
+                "role": UserRole.USER
             },
             {
                 "email": "user2@example.com",
                 "password": "User123@",
                 "name": "User Two",
-                "role": UserRole.USER,
-                "auth_method": "local",
-                "provider": "local"
+                "role": UserRole.USER
             },
             {
                 "email": "user3@example.com",
                 "password": "User123@",
                 "name": "User Three",
-                "role": UserRole.USER,
-                "auth_method": "local",
-                "provider": "local"
+                "role": UserRole.USER
             },
             {
                 "email": "user4@example.com",
                 "password": "User123@",
                 "name": "User Four",
-                "role": UserRole.USER,
-                "auth_method": "local",
-                "provider": "local"
+                "role": UserRole.USER
             },
             {
                 "email": "admin@luna.com",
                 "password": "Admin123@",
                 "name": "Admin User",
-                "role": UserRole.ADMIN,
-                "auth_method": "local",
-                "provider": "local"
+                "role": UserRole.ADMIN
             },
             {
                 "email": "admin2@luna.com",
                 "password": "Admin123@",
                 "name": "Admin Two",
-                "role": UserRole.ADMIN,
-                "auth_method": "local",
-                "provider": "local"
+                "role": UserRole.ADMIN
             }
         ]
         
@@ -107,9 +93,6 @@ def seed_initial_users(session: Session) -> bool:
                 email=user_data["email"],
                 password_hash=hash_password(user_data["password"]),
                 name=user_data["name"],
-                auth_method=user_data["auth_method"],
-                provider=user_data["provider"],
-                email_verified=True,  # Pre-verify seeded users
                 role=user_data["role"],
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)

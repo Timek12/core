@@ -110,7 +110,6 @@ DEBUG=false
 
 # Authentication
 JWT_SECRET_KEY=your-secret-key-here
-INTERNAL_SERVICE_TOKEN=your-internal-token-here
 ```
 
 Runs on port 8002.

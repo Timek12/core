@@ -149,7 +149,7 @@ class DataService:
         
         return result
 
-    async def _decrypt_data_item(self, data_item: Dict, master_key: bytes) -> None:
+    async def _decrypt_data_item(self, data_item: Dict, master_key: bytes, jwt_token: str) -> None:
         """Decrypt a single data item in place"""
         try:
             if not data_item.get("dek_id"):
@@ -157,7 +157,7 @@ class DataService:
                 data_item["decrypt_error"] = "No DEK associated with this data"
                 return
             
-            dek_record = await self.storage_client.get_dek(data_item["dek_id"])
+            dek_record = await self.storage_client.get_dek(data_item["dek_id"], jwt_token)
             
             dek_nonce = bytes.fromhex(dek_record["nonce"])
             encrypted_dek = bytes.fromhex(dek_record["encrypted_dek"])
@@ -200,7 +200,7 @@ class DataService:
                 
                 for data_item in data_list:
                     data_item['metadata'] = parse_metadata_json(data_item.get('metadata_json'))
-                    await self._decrypt_data_item(data_item, master_key)
+                    await self._decrypt_data_item(data_item, master_key, jwt_token)
                 
                 del master_key
         
@@ -232,7 +232,7 @@ class DataService:
                 
                 for data_item in data_list:
                     data_item['metadata'] = parse_metadata_json(data_item.get('metadata_json'))
-                    await self._decrypt_data_item(data_item, master_key)
+                    await self._decrypt_data_item(data_item, master_key, jwt_token)
                 
                 del master_key
         else:
@@ -258,7 +258,7 @@ class DataService:
             master_key_hex = await self.state_manager.get_master_key()
             if master_key_hex:
                 master_key = bytes.fromhex(master_key_hex)
-                await self._decrypt_data_item(data_item, master_key)
+                await self._decrypt_data_item(data_item, master_key, jwt_token)
                 del master_key
             else:
                 data_item["decrypted_data"] = {}
@@ -270,8 +270,6 @@ class DataService:
             
         return data_item
 
-    
-
     async def get_data(self, data_id: str, jwt_token: str) -> Dict:
         """ Get a specific data and decrypt it """
         logger.info(f"Fetching data {data_id}")
@@ -280,15 +278,22 @@ class DataService:
         
         data_item['metadata'] = parse_metadata_json(data_item.get('metadata_json'))
         
-        if not await self.state_manager.is_vault_sealed():
+        is_sealed = await self.state_manager.is_vault_sealed()
+        logger.info(f"Vault sealed status: {is_sealed}")
+        
+        if not is_sealed:
             master_key_hex = await self.state_manager.get_master_key()
+            logger.info(f"Master key found: {bool(master_key_hex)}")
+            
             if master_key_hex:
                 master_key = bytes.fromhex(master_key_hex)
-                await self._decrypt_data_item(data_item, master_key)
+                await self._decrypt_data_item(data_item, master_key, jwt_token)
                 del master_key
             else:
+                logger.warning("Vault unsealed but master key not found")
                 data_item["decrypted_data"] = {}
         else:
+            logger.info("Vault is sealed, returning empty decrypted data")
             data_item["decrypted_data"] = {}
         
         if 'user_id' in data_item:

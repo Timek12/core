@@ -55,12 +55,7 @@ class AuthService:
         user = Users(
             email=user_data.email,
             name=user_data.name,
-            avatar_url=user_data.avatar_url,
-            provider_user_id=user_data.provider_user_id,
-            auth_method=user_data.auth_method,
-            provider=user_data.provider,
             password_hash=self.hash_password(user_data.password) if user_data.password else None,
-            email_verified=True,
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc)
         )

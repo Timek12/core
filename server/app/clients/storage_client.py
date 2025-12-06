@@ -8,10 +8,7 @@ from typing import Dict, Any, List, Optional
 class StorageClient:
     def __init__(self, client: Optional[httpx.AsyncClient] = None):
         self.base_url = os.getenv("STORAGE_SERVICE_URL", "http://storage:8002")
-        self.internal_token = os.getenv("INTERNAL_SERVICE_TOKEN")
         self.headers: Dict[str, str] = {}
-        if self.internal_token:
-            self.headers["X-Internal-Token"] = self.internal_token
         
         # Use provided client or create a new one
         self.client = client
@@ -255,12 +252,12 @@ class StorageClient:
         response.raise_for_status()
         return response.json()
     
-    async def get_dek(self, dek_id: str) -> Dict[str, Any]:
+    async def get_dek(self, dek_id: str, jwt_token: Optional[str] = None) -> Dict[str, Any]:
         """Get a Data Encryption Key by ID"""
         response = await self._request(
             "GET",
             f"{self.base_url}/internal/deks/{dek_id}",
-            headers=self.headers
+            headers=self._get_headers(jwt_token)
         )
         response.raise_for_status()
         return response.json()

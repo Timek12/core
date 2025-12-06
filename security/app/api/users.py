@@ -6,12 +6,12 @@ from app.db.db import get_db
 from app.services.auth_service import AuthService
 from app.dto.user import UserResponse, UserPublic
 from app.dto.token import MessageResponse
-from app.dependencies import get_current_active_user, require_admin, get_current_user
+from app.dependencies import require_admin, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["users"])
 
 @router.get("/me", response_model=UserPublic)
-def get_current_user_info(current_user: Annotated[UserResponse, Depends(get_current_active_user)]):
+def get_current_user_info(current_user: Annotated[UserResponse, Depends(get_current_user)]):
     """Get current authenticated user information."""
     return UserPublic.from_orm(current_user)
 

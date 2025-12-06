@@ -10,7 +10,7 @@ from app.dto.token import (
     MessageResponse, LogoutAllResponse, SessionsResponse, 
     SessionInfo, RevokeTokenRequest
 )
-from app.dependencies import get_current_active_user, get_current_user, get_audit_logger, get_client_info
+from app.dependencies import get_current_user, get_audit_logger, get_client_info
 from app.clients.audit_logger import RedisAuditLogger
 
 router = APIRouter(prefix="/auth", tags=["sessions"])
@@ -55,7 +55,7 @@ def logout(
 def logout_all_devices(
     request: Request,
     background_tasks: BackgroundTasks,
-    current_user: Annotated[UserResponse, Depends(get_current_active_user)], 
+    current_user: Annotated[UserResponse, Depends(get_current_user)], 
     db: Session = Depends(get_db),
     audit_logger: RedisAuditLogger = Depends(get_audit_logger)
 ):
@@ -86,7 +86,7 @@ def logout_all_devices(
 
 @router.get("/sessions", response_model=SessionsResponse)
 def get_active_sessions(
-    current_user: Annotated[UserResponse, Depends(get_current_active_user)],
+    current_user: Annotated[UserResponse, Depends(get_current_user)],
     db: Session = Depends(get_db)
 ):
     """Get all active sessions (refresh tokens) for current user."""
@@ -116,7 +116,7 @@ def revoke_session(
     jti: str,
     request: Request,
     background_tasks: BackgroundTasks,
-    current_user: Annotated[UserResponse, Depends(get_current_active_user)],
+    current_user: Annotated[UserResponse, Depends(get_current_user)],
     db: Session = Depends(get_db),
     audit_logger: RedisAuditLogger = Depends(get_audit_logger)
 ):

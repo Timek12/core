@@ -86,7 +86,6 @@ STORAGE_SERVICE_URL=http://storage:8002
 
 # Authentication
 JWT_SECRET_KEY=your-secret-key-here
-INTERNAL_SERVICE_TOKEN=your-internal-token-here
 
 # Redis Configuration (for master key caching)
 REDIS_HOST=redis
