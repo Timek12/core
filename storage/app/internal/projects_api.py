@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.services.project_service import ProjectService
 from app.repositories.project_repository import ProjectRepository
-from app.db.db import get_db
+from app.services.project_service import ProjectService
+from app.repositories.project_repository import ProjectRepository
+from app.dependencies import get_db, get_current_user
 from app.dto.project import ProjectInternalCreate, ProjectMemberAdd, ProjectResponse, ProjectMemberResponse
-from app.utils.jwt_utils import get_current_user
 from app.dto.token import UserInfo
 
 logger = logging.getLogger(__name__)

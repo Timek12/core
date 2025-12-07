@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.db.db import get_db
+from app.dependencies import get_db, get_current_user, require_role
 from app.services.status_service import ServerStatusService
 from app.dto.server_status import ServerStatusUpdate, ServerStatusResponse
-from app.utils.jwt_utils import get_current_user, UserInfo, require_role
+from app.dto.token import UserInfo
 
 router = APIRouter(prefix="/internal/status", tags=["status"])
 

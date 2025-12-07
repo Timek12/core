@@ -1,7 +1,7 @@
 import jwt
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Optional, Callable
+from typing import Optional
 import os
 
 from app.dto.token import (
@@ -54,43 +54,4 @@ class JWTValidator:
 jwt_validator = JWTValidator()
 security = HTTPBearer()
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)) -> UserInfo:
-    try:
-        payload = jwt_validator.verify_token(credentials.credentials)
-    
-        return UserInfo(
-            user_id=payload.user_id,
-            email=payload.email,
-            roles=payload.roles
-        )
-    except TokenError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
-    
-# Factory pattern
 
-def require_role(required_role: str) -> Callable:
-    """Creates a dependency that checks for required role."""
-    async def role_checker(
-        current_user: UserInfo = Depends(get_current_user)
-    ) -> UserInfo:
-        if required_role not in current_user.roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Role '{required_role}' required"
-            )
-        return current_user
-    
-    return role_checker
-
-def get_admin_user(
-    current_user: UserInfo = Depends(require_role(UserRole.ADMIN))
-) -> UserInfo:
-    """
-    Nested dependency
-    Depends on require_role, which depends on get_current_user
-    Chain: get_admin_user -> require_role(admin) -> get_current_user -> security
-    When using this in route, all dependencies execute automatically
-    """
-    
-    return current_user

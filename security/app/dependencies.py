@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.db import get_db
 from app.services.auth_service import AuthService
 from app.dto.user import UserResponse
+from app.clients.audit_logger import RedisAuditLogger
 
 # OAuth2 scheme for token authorization
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
@@ -46,9 +47,8 @@ def get_client_info(request: Request) -> tuple[str, str]:
     ip_address = request.client.host if request.client else "unknown"
     return user_agent, ip_address
 
-def get_audit_logger() -> "RedisAuditLogger":
+def get_audit_logger() -> RedisAuditLogger:
     """Get Redis audit logger"""
-    from app.clients.audit_logger import RedisAuditLogger
     return RedisAuditLogger()
 
 def get_auth_service(

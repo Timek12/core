@@ -3,11 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Dict, Any
 
-from app.db.db import get_db
+from app.dependencies import get_db, get_current_user
 from app.services.dek_service import DEKService
-from app.services.dek_service import DEKService
-from app.utils.jwt_utils import get_current_user, UserInfo
-from app.utils.jwt_utils import get_current_user, UserInfo
+from app.dto.token import UserInfo
 
 def format_dek_response(dek, include_encrypted: bool = True) -> Dict[str, Any]:
     """Format DEK object to response dict"""

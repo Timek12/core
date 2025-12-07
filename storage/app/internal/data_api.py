@@ -7,9 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.services.data_service import DataService
 from app.repositories.data_repository import DataRepository
-from app.db.db import get_db
+from app.services.data_service import DataService
+from app.repositories.data_repository import DataRepository
+from app.dependencies import get_db, get_current_user, require_role
 from app.dto.data import DataInternalCreate, DataInternalUpdate
-from app.utils.jwt_utils import get_current_user, require_role
 from app.dto.token import UserInfo
 
 logger = logging.getLogger(__name__)

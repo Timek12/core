@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import uuid
 
-from app.db.db import get_db
+from app.dependencies import get_db, get_current_user, require_role
 from app.services.key_service import KeyService
 from app.dto.key import KeyCreate, KeyResponse
-from app.utils.jwt_utils import get_current_user, UserInfo, require_role
+from app.dto.token import UserInfo
 
 router = APIRouter(prefix="/internal/keys", tags=["keys"])
 
