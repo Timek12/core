@@ -105,11 +105,7 @@ class DataService:
         data_list = self.repository.list_all_data(data_type)
         return [self._serialize(data_item) for data_item in data_list]
 
-    def get_data_for_user_admin(
-        self, user_id: int, data_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        data_list = self.repository.list_data_for_user_admin(user_id, data_type)
-        return [self._serialize(data_item) for data_item in data_list]
+
 
     def delete_data_admin(self, data_id: uuid.UUID) -> bool:
         data_item = self.repository.get_by_id(data_id)

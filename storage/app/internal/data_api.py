@@ -153,15 +153,7 @@ def get_all_data_admin(
     return service.get_all_data_admin(data_type)
 
 
-@router.get("/admin/user/{user_id}")
-def get_data_for_user_admin(
-    user_id: int,
-    data_type: Optional[str] = Query(None, description="Filter by data type"),
-    _: UserInfo = Depends(_ensure_admin),
-    service: DataService = Depends(get_data_service),
-):
-    """Admin: list data for a specific user."""
-    return service.get_data_for_user_admin(user_id, data_type)
+
 
 
 @router.delete("/admin/{data_id}", status_code=status.HTTP_204_NO_CONTENT)

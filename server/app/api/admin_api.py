@@ -47,30 +47,7 @@ async def get_all_data(
         )
 
 
-@router.get("/data/user/{user_id}")
-async def get_user_data(
-    user_id: int,
-    request: Request,
-    data_type: Optional[str] = None,
-    _: UserInfo = Depends(get_admin_user),
-    storage_client: StorageClient = Depends(get_storage_client)
-):
-    """Get all data for a specific user with optional type filtering"""
-    try:
-        token = get_token_from_request(request)
-        
-        data_list = await storage_client.get_data_for_user(str(user_id), data_type, token)
-        
-        return {"data": data_list, "user_id": user_id}
-    except httpx.HTTPStatusError as e:
-        logger.error(f"Storage service error: {e.response.text}")
-        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
-    except Exception as e:
-        logger.error(f"Error getting user data: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+
 
 
 @router.delete("/data/{data_id}", status_code=status.HTTP_204_NO_CONTENT)

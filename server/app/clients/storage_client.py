@@ -183,18 +183,6 @@ class StorageClient:
         return status.get("sealed", True)
     
     
-    async def get_data_for_user(self, user_id: str, data_type: Optional[str] = None, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get data for a specific user via admin endpoint"""
-        params = {"data_type": data_type} if data_type else {}
-        response = await self._request(
-            "GET",
-            f"{self.base_url}/internal/data/admin/user/{user_id}",
-            headers=self._get_headers(jwt_token),
-            params=params
-        )
-        response.raise_for_status()
-        return response.json()
-    
     async def get_all_data_admin(self, data_type: Optional[str] = None, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all data across all users (admin only)"""
         params = {"data_type": data_type} if data_type else {}

@@ -46,21 +46,7 @@ def list_all_users(
     return [UserResponse.from_orm(user) for user in users]
 
 
-@router.get("/admin/users/{user_id}", response_model=UserResponse)
-def get_user_by_id(
-    user_id: int,
-    current_admin: Annotated[UserResponse, Depends(require_admin)],
-    db: Session = Depends(get_db)
-):
-    """Get user by ID."""
-    auth_service = AuthService(db)
-    user = auth_service.user_repo.find_by_id(user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with ID {user_id} not found"
-        )
-    return UserResponse.from_orm(user)
+
 
 
 @router.put("/admin/users/{user_id}", response_model=UserResponse)
