@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
-from app.repositories.dek_repository import DEKRepository
+from app.repositories.key_repository import KeyRepository
 from app.db.schema import EncryptionKeys
 
 
@@ -11,7 +11,7 @@ class DEKService:
     """Service for managing Data Encryption Keys"""
 
     def __init__(self, db: Session):
-        self.repository = DEKRepository(db)
+        self.repository = KeyRepository(db)
 
     def create_dek(self, encrypted_dek: str, nonce: str) -> EncryptionKeys:
         """Create a new DEK (already encrypted with KEK)"""

@@ -32,3 +32,13 @@ class KeyRepository:
         self.db.commit()
         self.db.refresh(key)
         return key
+
+    def deactivate(self, key_id: uuid.UUID) -> bool:
+        """Deactivate a key (soft delete/rotate)."""
+        key = self.find_by_id(key_id)
+        if not key:
+            return False
+        
+        key.status = 'rotated'
+        self.db.commit()
+        return True
