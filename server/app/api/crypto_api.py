@@ -25,7 +25,6 @@ router = APIRouter(prefix="/api/crypto", tags=["crypto"])
 async def init(
     req: InitRequest, 
     request: Request,
-    background_tasks: BackgroundTasks,
     current_user: UserInfo = Depends(require_role("admin")), 
     token: str = Depends(get_token),
     storage_client: StorageClient = Depends(get_storage_client)
@@ -65,7 +64,6 @@ async def init(
 async def unseal(
     req: UnsealRequest, 
     request: Request,
-    background_tasks: BackgroundTasks,
     current_user: UserInfo = Depends(require_role("admin")), 
     token: str = Depends(get_token),
     storage_client: StorageClient = Depends(get_storage_client)
@@ -106,7 +104,6 @@ async def unseal(
 @router.post("/seal", response_model=StatusResponse)
 async def seal(
     request: Request,
-    background_tasks: BackgroundTasks,
     current_user: UserInfo = Depends(require_role("admin"))
 ):
     """Seal the vault by clearing Redis session data"""
