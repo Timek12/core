@@ -37,7 +37,7 @@ class JWTValidator:
             )
         except jwt.InvalidTokenError as e:
             raise InvalidTokenError(f"Token verification failed: {str(e)}")
-        except ValueError as e:  # TokenType enum conversion failed
+        except ValueError as e:
             raise InvalidTokenError(f"Invalid token payload: {str(e)}")
 
 
@@ -72,21 +72,6 @@ def require_role(required_role: str) -> Callable:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Role '{required_role}' required"
-            )
-        return current_user
-    
-    return role_checker
-
-def require_roles(required_roles: list[str]) -> Callable:
-    """Creates a dependency that checks for required role."""
-    async def role_checker(
-        current_user: UserInfo = Depends(get_current_user)
-    ) -> UserInfo:
-        if not any(role in current_user.roles for role in required_roles):
-            roles_str = ", ".join(required_roles)
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"One of roles [{roles_str}] required"
             )
         return current_user
     

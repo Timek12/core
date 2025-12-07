@@ -5,8 +5,26 @@ from typing import Dict, Any
 
 from app.db.db import get_db
 from app.services.dek_service import DEKService
-from app.utils.dek_helpers import format_dek_response
+from app.services.dek_service import DEKService
 from app.utils.jwt_utils import get_current_user, UserInfo
+from app.utils.jwt_utils import get_current_user, UserInfo
+
+def format_dek_response(dek, include_encrypted: bool = True) -> Dict[str, Any]:
+    """Format DEK object to response dict"""
+    response = {
+        "id": str(dek.id),
+        "version": dek.version,
+        "is_active": dek.status == 'active',
+        "created_at": dek.created_at.isoformat()
+    }
+    
+    if include_encrypted:
+        response.update({
+            "encrypted_dek": dek.encrypted_key,
+            "nonce": dek.nonce
+        })
+    
+    return response
 
 
 router = APIRouter(prefix="/internal/deks", tags=["deks"])

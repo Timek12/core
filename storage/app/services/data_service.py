@@ -6,8 +6,16 @@ import uuid
 
 from app.repositories.data_repository import DataRepository
 from app.dto.data import DataInternalCreate, DataInternalUpdate
-from app.utils.typed_data_helpers import parse_metadata_json
+from app.dto.data import DataInternalCreate, DataInternalUpdate
+import json
 
+def parse_metadata_json(metadata_json: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not metadata_json:
+        return None
+    try:
+        return json.loads(metadata_json)
+    except json.JSONDecodeError:
+        return None
 
 class DataService:
     """Business logic for typed data stored in the storage service."""
