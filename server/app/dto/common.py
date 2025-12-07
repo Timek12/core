@@ -1,6 +1,3 @@
-"""
-Common DTOs used across all APIs for consistent response formatting
-"""
 from pydantic import BaseModel, Field
 from typing import Optional, Generic, TypeVar, List, Dict, Any
 from datetime import datetime
