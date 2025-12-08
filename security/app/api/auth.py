@@ -1,9 +1,7 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from app.db.db import get_db
 from app.services.auth_service import AuthService
 from app.dto.user import UserCreate, UserPublic, LoginRequest, UserResponse
 from app.dto.token import (
@@ -11,7 +9,7 @@ from app.dto.token import (
     RefreshTokenResponse, TokenVerificationResponse,
     RevokeTokenRequest, MessageResponse
 )
-from app.dependencies import get_client_info, oauth2_scheme, get_audit_logger, get_current_user
+from app.dependencies import get_client_info, oauth2_scheme, get_audit_logger, get_current_user, get_auth_service
 from app.clients.audit_logger import RedisAuditLogger
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -21,20 +19,19 @@ def register(
     user_data: UserCreate,
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    audit_logger: RedisAuditLogger = Depends(get_audit_logger)
+    audit_logger: RedisAuditLogger = Depends(get_audit_logger),
+    auth_service: AuthService = Depends(get_auth_service)
 ):
     """ Register a new user based on email password and name."""
-    auth_service = AuthService(db)
+
+    # Extract device info
+    device_info, ip_address = get_client_info(request)
 
     try:
         user = auth_service.create_user(user_data)
 
-        device_info, ip_address = get_client_info(request)
-
-        user_entity = auth_service.user_repo.find_by_id(user.user_id)
         tokens = auth_service.create_token_pair(
-            user_entity, device_info, ip_address)
+            user, device_info, ip_address)
             
         # Audit Log
         background_tasks.add_task(
@@ -50,12 +47,11 @@ def register(
         )
 
         return LoginResponse(
-            user=UserPublic.from_orm(user_entity),
+            user=UserPublic.from_orm(user),
             tokens=tokens
         )
     except ValueError as e:
         # Audit Log Failure
-        device_info, ip_address = get_client_info(request)
         background_tasks.add_task(
             audit_logger.log_event,
             action="register",
@@ -71,20 +67,17 @@ def register(
         )
 
 
-
-
-
 @router.post("/login", response_model=LoginResponse)
-def login_json(
+def login(
     credentials: LoginRequest,
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    audit_logger: RedisAuditLogger = Depends(get_audit_logger)
+    audit_logger: RedisAuditLogger = Depends(get_audit_logger),
+    auth_service: AuthService = Depends(get_auth_service)
 ):
-    """JSON login endpoint - accepts email/password in request body"""
+    """Login user based on email and password."""
 
-    auth_service = AuthService(db)
+    # Extract device info
     device_info, ip_address = get_client_info(request)
 
     # Authenticate
@@ -126,14 +119,15 @@ def login_json(
 
 
 @router.post("/refresh", response_model=TokenPair)
-def refresh_token(refresh_request: RefreshTokenRequest, request: Request, db: Session = Depends(get_db)):
+def refresh_token(
+    refresh_request: RefreshTokenRequest,
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service)
+):
     """Refresh both access and refresh tokens."""
-
-    auth_service = AuthService(db)
     
     # Extract device info
-    device_info = request.headers.get("User-Agent", "Unknown")
-    ip_address = request.client.host if request.client else "Unknown"
+    device_info, ip_address = get_client_info(request)
 
     token_pair = auth_service.refresh_token_pair(
         refresh_request.refresh_token, 
@@ -153,11 +147,9 @@ def refresh_token(refresh_request: RefreshTokenRequest, request: Request, db: Se
 @router.post("/verify", response_model=TokenVerificationResponse)
 def verify_token(
     token: Annotated[str, Depends(oauth2_scheme)],
-    db: Session = Depends(get_db)
+    auth_service: AuthService = Depends(get_auth_service)
 ):
     """Verify if access token is valid."""
-
-    auth_service = AuthService(db)
 
     payload = auth_service.verify_access_token(token)
     if not payload:
@@ -180,22 +172,33 @@ def logout(
     request: Request,
     background_tasks: BackgroundTasks,
     current_user: Annotated[UserResponse, Depends(get_current_user)], 
-    db: Session = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service),
     audit_logger: RedisAuditLogger = Depends(get_audit_logger)
 ):
     """Logout by revoking refresh token."""
 
-    auth_service = AuthService(db)
+    # Extract device info
+    device_info, ip_address = get_client_info(request)
 
     success = auth_service.revoke_token(revoke_request.token)
     if not success:
+        background_tasks.add_task(
+            audit_logger.log_event,
+            action="logout",
+            status="failure",
+            user_id=str(current_user.user_id),
+            resource_type="session",
+            ip_address=ip_address,
+            user_agent=device_info,
+            details="Logout failed: Invalid token or already revoked"
+        )
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid token or already revoked"
         )
     
     # Audit Log
-    device_info, ip_address = get_client_info(request)
     background_tasks.add_task(
         audit_logger.log_event,
         action="logout",

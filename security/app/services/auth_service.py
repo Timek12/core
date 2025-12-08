@@ -47,7 +47,7 @@ class AuthService:
             return None
         return user
     
-    def create_user(self, user_data: UserCreate) -> UserResponse:
+    def create_user(self, user_data: UserCreate) -> Users:
         if self.user_repo.exists_by_email(user_data.email):
             raise ValueError(f"User with email {user_data.email} already exists")
 
@@ -61,7 +61,7 @@ class AuthService:
         )
 
         saved_user = self.user_repo.save(user)
-        return UserResponse.from_orm(saved_user)
+        return saved_user
     
     # Token operations
     def create_access_token(self, user_id: int, email: str, roles: list[str] = None) -> Tuple[str, datetime]:
