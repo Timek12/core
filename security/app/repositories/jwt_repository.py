@@ -71,3 +71,12 @@ class JWTTokenRepository:
         """Delete a JWT token."""
         self.db.delete(token)
         self.db.commit()
+
+    def revoke_token(self, jti: uuid.UUID) -> bool:
+        """Revoke a token by JTI."""
+        token = self.find_by_jti(jti)
+        if not token:
+            return False
+        token.revoked = True
+        self.save(token)
+        return True
