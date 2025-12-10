@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends
 from app.services.crypto_service import CryptoService
 from app.clients.storage_client import StorageClient
 from app.utils.redis_state import get_state_manager
@@ -8,12 +8,7 @@ from app.dto.crypto import (
     InitRequest, 
     UnsealRequest, 
     StatusResponse, 
-    VaultStatus,
-    IssueDEKResponse,
-    EncryptRequest,
-    EncryptResponse,
-    DecryptRequest,
-    DecryptResponse
+    VaultStatus
 )
 from app.dto.client_info import ClientInfo
 import logging
