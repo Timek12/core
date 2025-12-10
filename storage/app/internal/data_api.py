@@ -70,6 +70,39 @@ def get_data(
     return data_item
 
 
+@router.get("/{data_id}/versions")
+def get_data_versions(
+    data_id: str,
+    current_user: UserInfo = Depends(get_current_user),
+    service: DataService = Depends(get_data_service),
+):
+    """Get version history for a data item."""
+    user_id = _parse_user_id(current_user)
+    data_uuid = _parse_data_id(data_id)
+    
+    versions = service.get_versions(data_uuid, user_id)
+    if versions is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data not found")
+    return versions
+
+
+@router.get("/{data_id}/versions/{version_num}")
+def get_data_version(
+    data_id: str,
+    version_num: int,
+    current_user: UserInfo = Depends(get_current_user),
+    service: DataService = Depends(get_data_service),
+):
+    """Get a specific historical version."""
+    user_id = _parse_user_id(current_user)
+    data_uuid = _parse_data_id(data_id)
+    
+    version = service.get_version(data_uuid, version_num, user_id)
+    if not version:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+    return version
+
+
 @router.get("")
 def list_data(
     request: Request,

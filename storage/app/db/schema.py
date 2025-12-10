@@ -107,6 +107,22 @@ class AuditLog(Base):
         Index('idx_audit_resource', 'resource_type', 'resource_id'),
     )
 
+class DataVersion(Base):
+    """Historical versions of data for versioning support"""
+    __tablename__ = 'data_versions'
+    
+    id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    data_id = Column(PGUUID(as_uuid=True), ForeignKey('data.id'), nullable=False)
+    version = Column(Integer, nullable=False)
+    encrypted_value = Column(Text, nullable=False)
+    dek_id = Column(PGUUID(as_uuid=True), nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_by = Column(Integer, nullable=True)
+    
+    __table_args__ = (
+        Index('idx_data_versions_data_id', 'data_id'),
+    )
+
 def schema_exists(engine) -> bool:
     """Check if the schema already exists by inspecting database tables."""
 
@@ -114,7 +130,7 @@ def schema_exists(engine) -> bool:
     existing_tables = inspector.get_table_names()
 
     # Define required tables for this service
-    required_tables = {'data', 'encryption_keys', 'server_status', 'audit_logs', 'projects', 'project_members'}
+    required_tables = {'data', 'encryption_keys', 'server_status', 'audit_logs', 'projects', 'project_members', 'data_versions'}
 
     # Check if all required tables exist
     return required_tables.issubset(set(existing_tables))

@@ -110,8 +110,11 @@ class DataRepository:
             .first()
         )
 
-    def update_data(self, data_item: Data, data: DataInternalUpdate) -> Data:
-        """Apply updates to a data record."""
+    def update_data(self, data_item: Data, data: DataInternalUpdate, user_id: int) -> Data:
+        """Update data fields."""
+        # Create a version snapshot before updating
+        self.create_version(data_item, user_id)
+        
         if data.name is not None:
             data_item.name = data.name
         if data.description is not None:
@@ -135,6 +138,40 @@ class DataRepository:
         self.db.commit()
         self.db.refresh(data_item)
         return data_item
+
+    def create_version(self, data_item: Data, created_by: int):
+        """Create a version snapshot before updating."""
+        from app.db.schema import DataVersion
+        version = DataVersion(
+            data_id=data_item.id,
+            version=data_item.version or 1,
+            encrypted_value=data_item.encrypted_value,
+            dek_id=data_item.dek_id,
+            created_by=created_by
+        )
+        self.db.add(version)
+
+    def get_versions(self, data_id: uuid.UUID):
+        """Get all versions for a data item."""
+        from app.db.schema import DataVersion
+        return (
+            self.db.query(DataVersion)
+            .filter(DataVersion.data_id == data_id)
+            .order_by(DataVersion.version.desc())
+            .all()
+        )
+
+    def get_version(self, data_id: uuid.UUID, version_num: int):
+        """Get a specific historical version."""
+        from app.db.schema import DataVersion
+        return (
+            self.db.query(DataVersion)
+            .filter(
+                DataVersion.data_id == data_id,
+                DataVersion.version == version_num
+            )
+            .first()
+        )
 
     def delete_data_for_user(self, data_item: Data) -> None:
         """Soft delete a data owned by the authenticated user."""

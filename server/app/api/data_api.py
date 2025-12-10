@@ -10,6 +10,7 @@ from app.utils.redis_state import get_state_manager
 from app.dto.token import UserInfo
 from app.dependencies import get_storage_client, get_client_info, get_current_user, get_token_from_request
 from app.dto.client_info import ClientInfo
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,95 @@ async def get_data_item(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Data not found"
+        )
+
+
+@router.get("/{data_id}/versions")
+async def get_data_versions(
+    data_id: str,
+    background_tasks: BackgroundTasks,
+    token: str = Depends(get_token_from_request),
+    user_info: UserInfo = Depends(get_current_user),
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
+):
+    """Get version history for a data item with decryption"""
+
+    try:
+        state_manager = await get_state_manager()
+        data_service = DataService(storage_client, state_manager)
+        
+        decrypted_versions = await data_service.get_data_versions(data_id, token)
+        
+        response_versions = []
+        for v in decrypted_versions:
+            response_versions.append({
+                "id": v["id"],
+                "version": v["version"],
+                "data": v.get("decrypted_data"),
+                "created_at": v["created_at"],
+                "created_by": v.get("created_by"),
+                "error": v.get("decrypt_error")
+            })
+        
+        # Audit Log
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="read_data_versions",
+            status="success",
+            user_id=str(user_info.user_id),
+            resource_type="data",
+            resource_id=data_id,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
+            details=f"Read {len(response_versions)} versions"
+        )
+        
+        return response_versions
+    except Exception as e:
+        logger.error(f"Error getting versions for data {data_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Data not found"
+        )
+
+
+@router.get("/{data_id}/versions/{version_num}")
+async def get_data_version(
+    data_id: str,
+    version_num: int,
+    background_tasks: BackgroundTasks,
+    token: str = Depends(get_token_from_request),
+    user_info: UserInfo = Depends(get_current_user),
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
+):
+    """Get a specific version of a data item with decryption"""
+    try:
+        state_manager = await get_state_manager()
+        data_service = DataService(storage_client, state_manager)
+        
+        result = await data_service.get_data_version(data_id, version_num, token)
+        
+        # Audit Log
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="read_data_version",
+            status="success",
+            user_id=str(user_info.user_id),
+            resource_type="data",
+            resource_id=data_id,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
+            details=f"Read version {version_num} of data {data_id}"
+        )
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error getting version {version_num} for data {data_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Version not found"
         )
 
 

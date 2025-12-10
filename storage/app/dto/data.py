@@ -162,3 +162,24 @@ class DataListItem(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class DataVersionResponse(BaseModel):
+    """Response for a historical version of data"""
+
+    id: str
+    data_id: str
+    version: int
+    encrypted_value: str
+    dek_id: str
+    created_at: datetime
+    created_by: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DataVersionListResponse(BaseModel):
+    """Response for a list of version metadata."""
+    versions: List[DataVersionResponse]
+    total: int

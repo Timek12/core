@@ -301,6 +301,52 @@ class DataService:
             
         return data_item
 
+    async def get_data_version(self, data_id: str, version_num: int, jwt_token: str) -> Dict:
+        """ Get a specific version of a data item and decrypt it """
+        logger.info(f"Fetching version {version_num} of data {data_id}")
+        
+        # Fetch the version from storage
+        version = await self.storage_client.get_data_version(data_id, version_num, jwt_token)
+        
+        # Check if we can decrypt
+        if not await self.state_manager.is_vault_sealed():
+            master_key_hex = await self.state_manager.get_master_key()
+            if master_key_hex:
+                 master_key = bytes.fromhex(master_key_hex)
+                 await self._decrypt_data_item(version, master_key, jwt_token)
+                 del master_key
+            else:
+                 version["decrypted_data"] = {}
+        else:
+            version["decrypted_data"] = {}
+            
+        return version
+
+    async def get_data_versions(self, data_id: str, jwt_token: str) -> List[Dict]:
+        """ Get all versions of a data item and decrypt them """
+        logger.info(f"Fetching versions for data {data_id}")
+        
+        # Fetch versions from storage
+        response = await self.storage_client.get_data_versions(data_id, jwt_token)
+        versions = response.get("versions", [])
+        
+        # Check if we can decrypt
+        if not await self.state_manager.is_vault_sealed():
+            master_key_hex = await self.state_manager.get_master_key()
+            if master_key_hex:
+                 master_key = bytes.fromhex(master_key_hex)
+                 for version in versions:
+                     await self._decrypt_data_item(version, master_key, jwt_token)
+                 del master_key
+            else:
+                 for version in versions:
+                     version["decrypted_data"] = {}
+        else:
+            for version in versions:
+                version["decrypted_data"] = {}
+                
+        return versions
+
     async def update_data(
         self,
         data_id: str,

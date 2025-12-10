@@ -5,37 +5,6 @@ from typing import Optional, TypedDict
 import uuid
 from datetime import datetime, timezone
 
-
-# OAuth Token DTOs
-class OAuthTokenBase(BaseModel):
-    """Base OAuth token schema."""
-    user_id: int
-    provider: str = Field(..., max_length=50)
-
-
-class OAuthTokenCreate(OAuthTokenBase):
-    """Schema for creating an OAuth refresh token."""
-    refresh_token: str
-    token_expires_at: Optional[datetime] = None
-
-
-class OAuthTokenUpdate(BaseModel):
-    """Schema for updating an OAuth refresh token."""
-    refresh_token: Optional[str] = None
-    token_expires_at: Optional[datetime] = None
-
-
-class OAuthTokenResponse(OAuthTokenBase):
-    """Schema for OAuth token response."""
-    id: int
-    refresh_token: str
-    token_expires_at: Optional[datetime] = None
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-
 # JWT Token DTOs
 class JWTTokenBase(BaseModel):
     """Base JWT token schema."""

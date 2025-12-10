@@ -60,6 +60,26 @@ class StorageClient:
         response.raise_for_status()
         return response.json()
 
+    async def get_data_versions(self, data_id: str, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get version history for a data item"""
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/internal/data/{data_id}/versions",
+            headers=self._get_headers(jwt_token)
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def get_data_version(self, data_id: str, version_num: int, jwt_token: Optional[str] = None) -> Dict[str, Any]:
+        """Get a specific version of a data item"""
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/internal/data/{data_id}/versions/{version_num}",
+            headers=self._get_headers(jwt_token)
+        )
+        response.raise_for_status()
+        return response.json()
+
     async def create_data(self, data: Dict[str, Any], project_id: Optional[str] = None, jwt_token: Optional[str] = None) -> Dict[str, Any]:
         """Create new data"""
         # Handle UUID serialization if needed
