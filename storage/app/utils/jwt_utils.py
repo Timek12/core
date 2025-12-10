@@ -1,6 +1,5 @@
 import jwt
-from fastapi import HTTPException, status, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer
 from typing import Optional
 import os
 
@@ -53,5 +52,3 @@ class JWTValidator:
 
 jwt_validator = JWTValidator()
 security = HTTPBearer()
-
-

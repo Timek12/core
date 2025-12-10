@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from typing import List, Optional
 import logging
 
@@ -6,50 +6,41 @@ from app.dto.data import DataCreateRequest, DataUpdateRequest, DataResponse, Dat
 from app.services.data_service import DataService
 from app.services.crypto_service import CryptoService
 from app.clients.storage_client import StorageClient
-from app.utils.jwt_utils import get_current_user
 from app.utils.redis_state import get_state_manager
 from app.dto.token import UserInfo
-from app.dependencies import get_storage_client, get_client_info
+from app.dependencies import get_storage_client, get_client_info, get_current_user, get_token_from_request
+from app.dto.client_info import ClientInfo
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/data", tags=["data"])
 
 
-def get_token_from_request(request: Request) -> str:
-    """Extract JWT token from request headers"""
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        return auth_header[7:]
-    return ""
-
-
 @router.get("", response_model=List[DataListItem])
 async def get_data(
-    request: Request,
     background_tasks: BackgroundTasks,
     data_type: Optional[str] = Query(None, description="Filter by data type"),
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
-    storage_client: StorageClient = Depends(get_storage_client)
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """Get all data for authenticated user"""
     try:
-        token = get_token_from_request(request)
         state_manager = await get_state_manager()
         data_service = DataService(storage_client, state_manager)
         
         result = await data_service.get_data_for_user(user_info.user_id, token, data_type)
         
         # Audit Log (Read List)
-        device_info, ip_address = get_client_info(request)
         background_tasks.add_task(
             state_manager.log_audit_event,
             action="read_data_list",
             status="success",
             user_id=str(user_info.user_id),
             resource_type="data",
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"Listed data (type: {data_type or 'all'})"
         )
         
@@ -65,21 +56,20 @@ async def get_data(
 @router.get("/{data_id}", response_model=DataResponse)
 async def get_data_item(
     data_id: str,
-    request: Request,
     background_tasks: BackgroundTasks,
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
-    storage_client: StorageClient = Depends(get_storage_client)
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """Get a specific data item by ID with decryption"""
     try:
-        token = get_token_from_request(request)
         state_manager = await get_state_manager()
         data_service = DataService(storage_client, state_manager)
         
         result = await data_service.get_data(data_id, token)
         
         # Audit Log (Read Item)
-        device_info, ip_address = get_client_info(request)
         background_tasks.add_task(
             state_manager.log_audit_event,
             action="read_data",
@@ -87,8 +77,8 @@ async def get_data_item(
             user_id=str(user_info.user_id),
             resource_type="data",
             resource_id=data_id,
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"Read data: {result['name']}"
         )
         
@@ -104,22 +94,21 @@ async def get_data_item(
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=DataResponse)
 async def create_data(
     data: DataCreateRequest,
-    request: Request,
     background_tasks: BackgroundTasks,
     project_id: Optional[str] = Query(None),
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
-    storage_client: StorageClient = Depends(get_storage_client)
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """Create a new typed data"""
     try:
-        token = get_token_from_request(request)
         state_manager = await get_state_manager()
         data_service = DataService(storage_client, state_manager)
         
         result = await data_service.create_data(data, token, project_id)
         
         # Audit Log
-        device_info, ip_address = get_client_info(request)
         background_tasks.add_task(
             state_manager.log_audit_event,
             action="create_data",
@@ -127,8 +116,8 @@ async def create_data(
             user_id=str(user_info.user_id),
             resource_type="data",
             resource_id=str(result['id']),
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"Created data: {data.name} ({data.data_type}) Project: {project_id}"
         )
         
@@ -148,15 +137,15 @@ async def create_data(
 @router.get("/project/{project_id}", response_model=List[DataListItem])
 async def list_data_for_project(
     project_id: str,
-    request: Request,
     background_tasks: BackgroundTasks,
+    token: str = Depends(get_token_from_request),
     data_type: Optional[str] = Query(None, description="Filter by data type"),
     user_info: UserInfo = Depends(get_current_user),
-    storage_client: StorageClient = Depends(get_storage_client)
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """List data belonging to a project"""
     try:
-        token = get_token_from_request(request)
         state_manager = await get_state_manager()
         data_service = DataService(storage_client, state_manager)
         
@@ -168,7 +157,6 @@ async def list_data_for_project(
         result = await data_service.list_data_for_project(project_id, token, data_type)
         
         # Audit Log
-        device_info, ip_address = get_client_info(request)
         background_tasks.add_task(
             state_manager.log_audit_event,
             action="read_project_data_list",
@@ -176,8 +164,8 @@ async def list_data_for_project(
             user_id=str(user_info.user_id),
             resource_type="data",
             resource_id=project_id, 
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"Listed project data (type: {data_type or 'all'})"
         )
         
@@ -195,14 +183,14 @@ async def list_data_for_project(
 async def get_data_for_project(
     project_id: str,
     data_id: str,
-    request: Request,
     background_tasks: BackgroundTasks,
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
-    storage_client: StorageClient = Depends(get_storage_client)
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """Get a specific project data item by ID with decryption"""
     try:
-        token = get_token_from_request(request)
         state_manager = await get_state_manager()
         data_service = DataService(storage_client, state_manager)
         
@@ -214,7 +202,6 @@ async def get_data_for_project(
         result = await data_service.get_data_for_project(project_id, data_id, token)
         
         # Audit Log
-        device_info, ip_address = get_client_info(request)
         background_tasks.add_task(
             state_manager.log_audit_event,
             action="read_project_data",
@@ -222,8 +209,8 @@ async def get_data_for_project(
             user_id=str(user_info.user_id),
             resource_type="data",
             resource_id=data_id,
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"Read project data: {result['name']}"
         )
         
@@ -242,21 +229,20 @@ async def get_data_for_project(
 async def update_data(
     data_id: str,
     data: DataUpdateRequest,
-    request: Request,
     background_tasks: BackgroundTasks,
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
-    storage_client: StorageClient = Depends(get_storage_client)
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """Update an existing data"""
     try:
-        token = get_token_from_request(request)
         state_manager = await get_state_manager()
         data_service = DataService(storage_client, state_manager)
         
         result = await data_service.update_data(data_id, data, token, str(user_info.user_id))
         
         # Audit Log
-        device_info, ip_address = get_client_info(request)
         background_tasks.add_task(
             state_manager.log_audit_event,
             action="update_data",
@@ -264,8 +250,8 @@ async def update_data(
             user_id=str(user_info.user_id),
             resource_type="data",
             resource_id=data_id,
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"Updated data: {data.name}"
         )
         
@@ -286,14 +272,14 @@ async def update_data(
 @router.delete("/{data_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_data(
     data_id: str,
-    request: Request,
     background_tasks: BackgroundTasks,
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
-    storage_client: StorageClient = Depends(get_storage_client)
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """Delete a data"""
     try:
-        token = get_token_from_request(request)
         state_manager = await get_state_manager()
         data_service = DataService(storage_client, state_manager)
         
@@ -334,7 +320,6 @@ async def delete_data(
             )
             
         # Audit Log
-        device_info, ip_address = get_client_info(request)
         background_tasks.add_task(
             state_manager.log_audit_event,
             action="delete_data",
@@ -342,8 +327,8 @@ async def delete_data(
             user_id=str(user_info.user_id),
             resource_type="data",
             resource_id=data_id,
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"Deleted data: {data_item.get('name', 'unknown')}"
         )
         

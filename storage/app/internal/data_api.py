@@ -152,10 +152,6 @@ def get_all_data_admin(
     """Admin: list all data across users."""
     return service.get_all_data_admin(data_type)
 
-
-
-
-
 @router.delete("/admin/{data_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_data_admin(
     data_id: str,

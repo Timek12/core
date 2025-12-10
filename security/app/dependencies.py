@@ -7,6 +7,7 @@ from app.db.db import get_db
 from app.services.auth_service import AuthService
 from app.dto.user import UserResponse
 from app.clients.audit_logger import RedisAuditLogger
+from app.dto.client_info import ClientInfo
 
 # OAuth2 scheme for token authorization
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
@@ -40,12 +41,11 @@ async def require_admin(
         )
     return current_user
 
-
-def get_client_info(request: Request) -> tuple[str, str]:
+def get_client_info(request: Request) -> ClientInfo:
     """Extract device info and IP address from request."""
     user_agent = request.headers.get("user-agent", "unknown")
     ip_address = request.client.host if request.client else "unknown"
-    return user_agent, ip_address
+    return ClientInfo(device_info=user_agent, ip_address=ip_address)
 
 def get_audit_logger() -> RedisAuditLogger:
     """Get Redis audit logger"""

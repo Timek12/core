@@ -45,7 +45,6 @@ def get_key_by_type(
     
     return key
 
-
 @router.post("", response_model=KeyResponse, status_code=status.HTTP_201_CREATED)
 def create_key(
     key_data: KeyCreate, 

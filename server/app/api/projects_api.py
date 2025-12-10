@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 import logging
 
 from app.services.project_service import ProjectService
 from app.clients.storage_client import StorageClient
-from app.utils.jwt_utils import get_current_user
 from app.utils.redis_state import get_state_manager
 from app.dto.token import UserInfo
-from app.dependencies import get_storage_client, get_client_info
+from app.dependencies import get_storage_client, get_client_info, get_current_user, get_token_from_request
 from pydantic import BaseModel
+from app.dto.client_info import ClientInfo
 
 logger = logging.getLogger(__name__)
 
@@ -20,31 +20,23 @@ class ProjectMemberAddRequest(BaseModel):
     user_id: int
     role: str = "member"
 
-def get_token_from_request(request: Request) -> str:
-    """Extract JWT token from request headers"""
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        return auth_header[7:]
-    return ""
-
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_project(
-    request: Request,
     project_data: ProjectCreateRequest,
     background_tasks: BackgroundTasks,
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
-    storage_client: StorageClient = Depends(get_storage_client)
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """Create a new project"""
     try:
-        token = get_token_from_request(request)
         state_manager = await get_state_manager()
         project_service = ProjectService(storage_client, state_manager)
         
         result = await project_service.create_project(project_data.name, token)
         
         # Audit Log
-        device_info, ip_address = get_client_info(request)
         background_tasks.add_task(
             state_manager.log_audit_event,
             action="create_project",
@@ -52,8 +44,8 @@ async def create_project(
             user_id=str(user_info.user_id),
             resource_type="project",
             resource_id=str(result['id']),
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"Created project: {project_data.name}"
         )
         
@@ -64,13 +56,12 @@ async def create_project(
 
 @router.get("")
 async def list_projects(
-    request: Request,
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
     storage_client: StorageClient = Depends(get_storage_client)
 ):
     """List projects for the authenticated user"""
     try:
-        token = get_token_from_request(request)
         project_service = ProjectService(storage_client)
         return await project_service.list_projects_for_user(int(user_info.user_id), token)
     except Exception as e:
@@ -80,13 +71,12 @@ async def list_projects(
 @router.get("/{project_id}")
 async def get_project(
     project_id: str,
-    request: Request,
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
     storage_client: StorageClient = Depends(get_storage_client)
 ):
     """Get project details"""
     try:
-        token = get_token_from_request(request)
         project_service = ProjectService(storage_client)
         
         # Verify membership
@@ -105,14 +95,14 @@ async def get_project(
 async def update_project(
     project_id: str,
     project_data: ProjectCreateRequest,
-    request: Request,
     background_tasks: BackgroundTasks,
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
-    storage_client: StorageClient = Depends(get_storage_client)
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """Update project details"""
     try:
-        token = get_token_from_request(request)
         state_manager = await get_state_manager()
         project_service = ProjectService(storage_client, state_manager)
         
@@ -123,7 +113,6 @@ async def update_project(
         result = await project_service.update_project(project_id, project_data.name, token)
         
         # Audit Log
-        device_info, ip_address = get_client_info(request)
         background_tasks.add_task(
             state_manager.log_audit_event,
             action="update_project",
@@ -131,8 +120,8 @@ async def update_project(
             user_id=str(user_info.user_id),
             resource_type="project",
             resource_id=project_id,
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"Updated project name to: {project_data.name}"
         )
         
@@ -147,14 +136,14 @@ async def update_project(
 async def add_member(
     project_id: str,
     member_data: ProjectMemberAddRequest,
-    request: Request,
     background_tasks: BackgroundTasks,
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
-    storage_client: StorageClient = Depends(get_storage_client)
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """Add a member to the project"""
     try:
-        token = get_token_from_request(request)
         state_manager = await get_state_manager()
         project_service = ProjectService(storage_client, state_manager)
         
@@ -169,7 +158,6 @@ async def add_member(
         result = await project_service.add_member(project_id, member_data.user_id, member_data.role, token)
         
         # Audit Log
-        device_info, ip_address = get_client_info(request)
         background_tasks.add_task(
             state_manager.log_audit_event,
             action="add_project_member",
@@ -177,8 +165,8 @@ async def add_member(
             user_id=str(user_info.user_id),
             resource_type="project",
             resource_id=project_id,
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"Added user {member_data.user_id} to project as {member_data.role}"
         )
         
@@ -191,14 +179,15 @@ async def add_member(
 async def remove_member(
     project_id: str,
     user_id: int,
-    request: Request,
     background_tasks: BackgroundTasks,
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
-    storage_client: StorageClient = Depends(get_storage_client)
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """Remove a member from the project"""
     try:
-        token = get_token_from_request(request)
+
         state_manager = await get_state_manager()
         project_service = ProjectService(storage_client, state_manager)
         
@@ -213,7 +202,6 @@ async def remove_member(
         await project_service.remove_member(project_id, user_id, token)
         
         # Audit Log
-        device_info, ip_address = get_client_info(request)
         background_tasks.add_task(
             state_manager.log_audit_event,
             action="remove_project_member",
@@ -221,8 +209,8 @@ async def remove_member(
             user_id=str(user_info.user_id),
             resource_type="project",
             resource_id=project_id,
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"Removed user {user_id} from project"
         )
         
@@ -236,13 +224,12 @@ async def remove_member(
 @router.get("/{project_id}/members")
 async def get_members(
     project_id: str,
-    request: Request,
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
     storage_client: StorageClient = Depends(get_storage_client)
 ):
     """List project members"""
     try:
-        token = get_token_from_request(request)
         project_service = ProjectService(storage_client)
         
         is_member = await project_service.is_member(project_id, int(user_info.user_id), token)
@@ -259,21 +246,20 @@ async def get_members(
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(
     project_id: str,
-    request: Request,
     background_tasks: BackgroundTasks,
+    token: str = Depends(get_token_from_request),
     user_info: UserInfo = Depends(get_current_user),
-    storage_client: StorageClient = Depends(get_storage_client)
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """Delete a project"""
     try:
-        token = get_token_from_request(request)
         state_manager = await get_state_manager()
         project_service = ProjectService(storage_client, state_manager)
         
         await project_service.delete_project(project_id, int(user_info.user_id), token)
         
         # Audit Log
-        device_info, ip_address = get_client_info(request)
         background_tasks.add_task(
             state_manager.log_audit_event,
             action="delete_project",
@@ -281,8 +267,8 @@ async def delete_project(
             user_id=str(user_info.user_id),
             resource_type="project",
             resource_id=project_id,
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"Deleted project {project_id}"
         )
         

@@ -1,5 +1,5 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.services.auth_service import AuthService
@@ -8,6 +8,7 @@ from app.dto.token import MessageResponse
 from app.dependencies import require_admin, get_current_user, get_audit_logger, get_client_info, get_auth_service
 from app.db.schema import UserRole
 from app.clients.audit_logger import RedisAuditLogger
+from app.dto.client_info import ClientInfo
 
 router = APIRouter(prefix="/auth", tags=["users"])
 
@@ -48,27 +49,24 @@ def list_all_users(
 def update_user_role(
     user_id: int,
     role_update: dict,
-    request: Request,
     background_tasks: BackgroundTasks,
     current_admin: Annotated[UserResponse, Depends(require_admin)],
     auth_service: AuthService = Depends(get_auth_service),
-    audit_logger: RedisAuditLogger = Depends(get_audit_logger)
+    audit_logger: RedisAuditLogger = Depends(get_audit_logger),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """Update user role."""
     
-    # Extract device info
-    device_info, ip_address = get_client_info(request)
-
     user = auth_service.user_repo.find_by_id(user_id)
     if not user:
         background_tasks.add_task(
             audit_logger.log_event,
-            action="update_role",
+            action="update_role",       
             status="failure",
             resource_type="user",
             resource_id=str(user_id),
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"User not found: {user_id}"
         )
         raise HTTPException(
@@ -85,8 +83,8 @@ def update_user_role(
             status="failure",
             resource_type="user",
             resource_id=str(user_id),
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"Invalid role: {new_role}"
         )
         raise HTTPException(
@@ -102,8 +100,8 @@ def update_user_role(
             status="failure",
             resource_type="user",
             resource_id=str(user_id),
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details="Admin attempted to remove own admin role"
         )
         raise HTTPException(
@@ -124,8 +122,8 @@ def update_user_role(
         user_id=str(current_admin.user_id),
         resource_type="user",
         resource_id=str(user_id),
-        ip_address=ip_address,
-        user_agent=device_info,
+        ip_address=client_info.ip_address,
+        user_agent=client_info.device_info,
         details=f"Role updated from {old_role} to {new_role}"
     )
 
@@ -135,16 +133,13 @@ def update_user_role(
 @router.delete("/admin/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     user_id: int,
-    request: Request,
     background_tasks: BackgroundTasks,
     current_admin: Annotated[UserResponse, Depends(require_admin)],
     auth_service: AuthService = Depends(get_auth_service),
-    audit_logger: RedisAuditLogger = Depends(get_audit_logger)
+    audit_logger: RedisAuditLogger = Depends(get_audit_logger),
+    client_info: ClientInfo = Depends(get_client_info)
 ):
     """Delete user."""
-    
-    # Extract device info
-    device_info, ip_address = get_client_info(request)
 
     # Prevent admin from deleting themselves
     if user_id == current_admin.user_id:
@@ -154,8 +149,8 @@ def delete_user(
             status="failure",
             resource_type="user",
             resource_id=str(user_id),
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details="Admin attempted to delete own account"
         )
         raise HTTPException(
@@ -171,8 +166,8 @@ def delete_user(
             status="failure",
             resource_type="user",
             resource_id=str(user_id),
-            ip_address=ip_address,
-            user_agent=device_info,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
             details=f"User not found: {user_id}"
         )
         raise HTTPException(
@@ -191,8 +186,8 @@ def delete_user(
         user_id=str(current_admin.user_id),
         resource_type="user",
         resource_id=str(user_id),
-        ip_address=ip_address,
-        user_agent=device_info,
+        ip_address=client_info.ip_address,
+        user_agent=client_info.device_info,
         details=f"User deleted: {user_email}"
     )
 

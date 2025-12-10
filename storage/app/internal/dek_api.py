@@ -24,9 +24,7 @@ def format_dek_response(dek, include_encrypted: bool = True) -> Dict[str, Any]:
     
     return response
 
-
 router = APIRouter(prefix="/internal/deks", tags=["deks"])
-
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_dek(dek_data: Dict[str, Any], db: Session = Depends(get_db), current_user: UserInfo = Depends(get_current_user)) -> Dict[str, Any]:
@@ -73,6 +71,3 @@ def get_dek(dek_id: str, db: Session = Depends(get_db), current_user: UserInfo =
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get DEK: {str(e)}"
         )
-
-
-
