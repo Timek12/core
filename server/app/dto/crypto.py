@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from .common import DataResponse, SuccessResponse, StatusEnum
+from .common import DataResponse, StatusEnum
 
 class InitRequest(BaseModel):
     """Initialize vault request"""

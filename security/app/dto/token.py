@@ -84,19 +84,17 @@ class JWTTokenPublic(BaseModel):
     class Config:
         from_attributes = True
 
-@dataclass
 class TokenType(str, Enum):
     ACCESS = "access"
     REFRESH = "refresh"
     
-@dataclass    
 class TokenPayload(TypedDict):
     user_id: str
     email: str
     roles: list[str]
     token_type: TokenType
-    exp: Optional[int] = None
-    iat: Optional[int] = None
+    exp: Optional[int]
+    iat: Optional[int]
     
     @property
     def is_expired(self) -> bool:
@@ -186,7 +184,7 @@ class ExpiredTokenError(TokenVerificationError):
     pass
 
 class InvalidTokenError(TokenVerificationError):
-    """Token is invalid (tampered, wrong signature, etc.)"""
+    """Token is invalid"""
     pass
 
 # Import for forward reference
