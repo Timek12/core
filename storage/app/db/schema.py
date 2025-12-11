@@ -77,13 +77,7 @@ class EncryptionKeys(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-class ServerStatus(Base):
-    """Server status table"""
-    __tablename__ = 'server_status'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    sealed = Column(Boolean, nullable=False)
-    last_changed = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+
 
 class AuditLog(Base):
     """Audit log table for persistent security logging"""
@@ -130,7 +124,7 @@ def schema_exists(engine) -> bool:
     existing_tables = inspector.get_table_names()
 
     # Define required tables for this service
-    required_tables = {'data', 'encryption_keys', 'server_status', 'audit_logs', 'projects', 'project_members', 'data_versions'}
+    required_tables = {'data', 'encryption_keys', 'audit_logs', 'projects', 'project_members', 'data_versions'}
 
     # Check if all required tables exist
     return required_tables.issubset(set(existing_tables))

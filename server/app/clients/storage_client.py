@@ -166,41 +166,7 @@ class StorageClient:
         response.raise_for_status()
         return response.json()
         
-    async def get_server_status(self) -> Dict[str, Any]:
-        """Get current server status"""
-        response = await self._request(
-            "GET",
-            f"{self.base_url}/internal/status",
-            headers=self.headers
-        )
-        response.raise_for_status()
-        return response.json()
-    
-    async def update_server_status(self, status_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Update server status"""
-        serializable_data = self._convert_uuids_to_strings(status_data)
-        
-        response = await self._request(
-            "PUT",
-            f"{self.base_url}/internal/status",
-            headers=self.headers,
-            json=serializable_data
-        )
-        response.raise_for_status()
-        return response.json()
-    
-    async def seal_vault(self) -> Dict[str, Any]:
-        """Seal the vault"""
-        return await self.update_server_status({"sealed": True})
-    
-    async def unseal_vault(self) -> Dict[str, Any]:
-        """Unseal the vault"""
-        return await self.update_server_status({"sealed": False})
-    
-    async def is_vault_sealed(self) -> bool:
-        """Check if vault is currently sealed"""
-        status = await self.get_server_status()
-        return status.get("sealed", True)
+
     
     
     async def get_all_data_admin(self, data_type: Optional[str] = None, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
