@@ -54,6 +54,10 @@ class Data(Base):
     updated_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     
     project_id = Column(PGUUID(as_uuid=True), ForeignKey('projects.id'), nullable=True)
+
+    # Rotation Policy
+    rotation_interval_days = Column(Integer, nullable=True)  # Days between rotations
+    next_rotation_date = Column(TIMESTAMP(timezone=True), nullable=True)
     
     __table_args__ = (
         Index('idx_data_name', 'name'),

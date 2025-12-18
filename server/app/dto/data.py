@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel, Field
 
 
@@ -50,6 +51,7 @@ class DataCreateRequest(BaseModel):
     host: Optional[str] = None
     certificate: Optional[str] = None
     chain: Optional[str] = None
+    rotation_interval_days: Optional[int] = None
 
 
 class DataUpdateRequest(BaseModel):
@@ -70,6 +72,7 @@ class DataUpdateRequest(BaseModel):
     certificate: Optional[str] = None
     chain: Optional[str] = None
     project_id: Optional[str] = None
+    rotation_interval_days: Optional[int] = None
 
 
 class DataResponse(BaseModel):
@@ -85,7 +88,9 @@ class DataResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    project_id: Optional[str] = None
+    project_id: Optional[UUID] = None
+    rotation_interval_days: Optional[int] = None
+    next_rotation_date: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -104,5 +109,18 @@ class DataListItem(BaseModel):
     created_at: datetime
     updated_at: datetime
     
+    class Config:
+        from_attributes = True
+
+
+class DataVersionResponse(BaseModel):
+    """Response for a historical version of data"""
+    id: str
+    version: int
+    decrypted_data: Optional[Dict[str, Any]] = Field(None, alias="data")
+    created_at: datetime
+    created_by: Optional[int] = None
+    error: Optional[str] = None
+
     class Config:
         from_attributes = True

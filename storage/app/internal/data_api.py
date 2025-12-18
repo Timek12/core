@@ -10,7 +10,7 @@ from app.repositories.data_repository import DataRepository
 from app.services.data_service import DataService
 from app.repositories.data_repository import DataRepository
 from app.dependencies import get_db, get_current_user, require_role
-from app.dto.data import DataInternalCreate, DataInternalUpdate
+from app.dto.data import DataInternalCreate, DataInternalUpdate, DataResponse
 from app.dto.token import UserInfo
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,15 @@ def _parse_user_id(user_info: UserInfo) -> int:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user id") from exc
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.get("/internal/rotation-due")
+def get_due_rotations(
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    service = DataService(DataRepository(db))
+    return service.get_due_rotations(limit)
+
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=DataResponse)
 def create_data(
     request: DataInternalCreate,
     project_id: Optional[uuid.UUID] = Query(None),

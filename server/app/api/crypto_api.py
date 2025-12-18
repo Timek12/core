@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from app.services.crypto_service import CryptoService
 from app.clients.storage_client import StorageClient
 from app.utils.redis_state import get_state_manager
-from app.dependencies import get_storage_client, get_client_info, get_current_user, require_role, get_token
+from app.dependencies import get_storage_client, get_client_info, get_current_user, require_role, get_token, get_notification_service
+from app.services.notification_service import NotificationService, AlertLevel
 from app.dto.token import UserInfo
 from app.dto.crypto import (
     InitRequest, 
@@ -23,7 +24,8 @@ async def init(
     current_user: UserInfo = Depends(require_role("admin")), 
     token: str = Depends(get_token),
     storage_client: StorageClient = Depends(get_storage_client),
-    client_info: ClientInfo = Depends(get_client_info)
+    client_info: ClientInfo = Depends(get_client_info),
+    notification_service: NotificationService = Depends(get_notification_service)
 ):
     """Initialize the vault with Redis state management"""
     try:
@@ -38,6 +40,11 @@ async def init(
             user_agent=client_info.device_info
         )
         
+        await notification_service.send_slack_notification(
+            f"Vault Initialized by user {current_user.user_id} from {client_info.ip_address}",
+            level=AlertLevel.CRITICAL
+        )
+
         return StatusResponse(
             vault=VaultStatus(
                 sealed=result["sealed"], 
@@ -59,7 +66,8 @@ async def unseal(
     current_user: UserInfo = Depends(require_role("admin")), 
     token: str = Depends(get_token),
     storage_client: StorageClient = Depends(get_storage_client),
-    client_info: ClientInfo = Depends(get_client_info)
+    client_info: ClientInfo = Depends(get_client_info),
+    notification_service: NotificationService = Depends(get_notification_service)
 ):
     """Unseal the vault using Redis for session management"""
     try:
@@ -74,6 +82,11 @@ async def unseal(
             user_agent=client_info.device_info
         )
         
+        await notification_service.send_slack_notification(
+            f"Vault Unsealed by user {current_user.user_id} from {client_info.ip_address}",
+            level=AlertLevel.WARNING
+        )
+
         return StatusResponse(
             vault=VaultStatus(
                 sealed=result["sealed"],
@@ -94,7 +107,8 @@ async def unseal(
 @router.post("/seal", response_model=StatusResponse)
 async def seal(
     current_user: UserInfo = Depends(require_role("admin")),
-    client_info: ClientInfo = Depends(get_client_info)
+    client_info: ClientInfo = Depends(get_client_info),
+    notification_service: NotificationService = Depends(get_notification_service)
 ):
     """Seal the vault by clearing Redis session data"""
     try:
@@ -107,6 +121,11 @@ async def seal(
             user_agent=client_info.device_info
         )
         
+        await notification_service.send_slack_notification(
+            f"Vault Sealed by user {current_user.user_id} from {client_info.ip_address}",
+            level=AlertLevel.CRITICAL
+        )
+
         return StatusResponse(
             vault=VaultStatus(
                 sealed=result["sealed"],

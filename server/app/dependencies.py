@@ -8,6 +8,11 @@ from app.clients.security_client import SecurityClient
 from app.utils.jwt_utils import JWTValidator
 from app.dto.token import TokenError, UserInfo, UserRole
 from app.dto.client_info import ClientInfo
+from app.services.notification_service import NotificationService
+
+def get_notification_service() -> NotificationService:
+    """Dependency to get NotificationService"""
+    return NotificationService()
 
 security = HTTPBearer()
 jwt_validator = JWTValidator()
@@ -67,11 +72,4 @@ def require_role(required_role: str) -> Callable:
 def get_admin_user(
     current_user: UserInfo = Depends(require_role(UserRole.ADMIN))
 ) -> UserInfo:
-    """
-    Nested dependency
-    Depends on require_role, which depends on get_current_user
-    Chain: get_admin_user -> require_role(admin) -> get_current_user -> security
-    When using this in route, all dependencies execute automatically
-    """
-    
     return current_user

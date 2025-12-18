@@ -60,6 +60,17 @@ class StorageClient:
         response.raise_for_status()
         return response.json()
 
+    async def get_due_rotations(self, limit: int = 50, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get list of active secrets that are due for rotation."""
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/internal/data/internal/rotation-due",
+            headers=self._get_headers(jwt_token),
+            params={"limit": limit}
+        )
+        response.raise_for_status()
+        return response.json()
+
     async def get_data_versions(self, data_id: str, jwt_token: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get version history for a data item"""
         response = await self._request(

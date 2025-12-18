@@ -28,8 +28,13 @@ class DataRepository:
             dek_id=uuid.UUID(str(data.dek_id)),
             is_active=True,
             version=1,
-            project_id=project_id
+            project_id=project_id,
+            rotation_interval_days=data.rotation_interval_days
         )
+        if data.rotation_interval_days:
+            from datetime import timedelta
+            data_item.next_rotation_date = datetime.now(timezone.utc) + timedelta(days=data.rotation_interval_days)
+
         self.db.add(data_item)
         self.db.commit()
         self.db.refresh(data_item)
@@ -78,18 +83,18 @@ class DataRepository:
         )
 
     def list_data_for_user(self, user_id: int, data_type: Optional[str] = None) -> List[Data]:
-        """Return active data for a user, optionally filtered by type."""
+        """Return all active personal data for a user."""
         query = self.db.query(Data).filter(
             Data.user_id == user_id,
             Data.is_active.is_(True),
-            Data.project_id.is_(None) # Only personal data
+            Data.project_id.is_(None)
         )
         if data_type:
             query = query.filter(Data.data_type == data_type)
         return query.order_by(Data.created_at.desc()).all()
 
     def list_data_for_project(self, project_id: uuid.UUID, data_type: Optional[str] = None) -> List[Data]:
-        """Return active data for a project."""
+        """Return all active data for a project."""
         query = self.db.query(Data).filter(
             Data.project_id == project_id,
             Data.is_active.is_(True)
@@ -99,16 +104,12 @@ class DataRepository:
         return query.order_by(Data.created_at.desc()).all()
 
     def get_data_for_project(self, data_id: uuid.UUID, project_id: uuid.UUID) -> Optional[Data]:
-        """Fetch a data that belongs to the given project."""
-        return (
-            self.db.query(Data)
-            .filter(
-                Data.id == data_id,
-                Data.project_id == project_id,
-                Data.is_active.is_(True),
-            )
-            .first()
-        )
+        """Fetch a specific data item from a project."""
+        return self.db.query(Data).filter(
+            Data.id == data_id,
+            Data.project_id == project_id,
+            Data.is_active.is_(True)
+        ).first()
 
     def update_data(self, data_item: Data, data: DataInternalUpdate, user_id: int) -> Data:
         """Update data fields."""
@@ -131,6 +132,14 @@ class DataRepository:
             data_item.dek_id = uuid.UUID(str(data.dek_id))
         if data.project_id is not None:
             data_item.project_id = data.project_id
+        if data.rotation_interval_days is not None:
+            data_item.rotation_interval_days = data.rotation_interval_days
+            from datetime import timedelta
+            # Recalculate next rotation date if interval changes
+            if data.rotation_interval_days > 0:
+                 data_item.next_rotation_date = datetime.now(timezone.utc) + timedelta(days=data.rotation_interval_days)
+            else:
+                 data_item.next_rotation_date = None
 
         data_item.version = (data_item.version or 0) + 1
         data_item.updated_at = datetime.now(timezone.utc)
@@ -207,3 +216,15 @@ class DataRepository:
     def get_by_id(self, data_id: uuid.UUID) -> Optional[Data]:
         """Fetch a data without user constraints."""
         return self.db.query(Data).filter(Data.id == data_id, Data.is_active.is_(True)).first()
+
+    def get_due_rotations(self, limit: int = 50) -> List[Data]:
+        """Get list of active secrets that are due for rotation."""
+        return (
+            self.db.query(Data)
+            .filter(
+                Data.is_active.is_(True),
+                Data.next_rotation_date <= datetime.now(timezone.utc)
+            )
+            .limit(limit)
+            .all()
+        )

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Background
 from typing import List, Optional
 import logging
 
-from app.dto.data import DataCreateRequest, DataUpdateRequest, DataResponse, DataListItem
+from app.dto.data import DataCreateRequest, DataUpdateRequest, DataResponse, DataListItem, DataVersionResponse
 from app.services.data_service import DataService
 from app.services.crypto_service import CryptoService
 from app.clients.storage_client import StorageClient
@@ -92,7 +92,7 @@ async def get_data_item(
         )
 
 
-@router.get("/{data_id}/versions")
+@router.get("/{data_id}/versions", response_model=List[DataVersionResponse])
 async def get_data_versions(
     data_id: str,
     background_tasks: BackgroundTasks,
@@ -142,7 +142,7 @@ async def get_data_versions(
         )
 
 
-@router.get("/{data_id}/versions/{version_num}")
+@router.get("/{data_id}/versions/{version_num}", response_model=DataVersionResponse)
 async def get_data_version(
     data_id: str,
     version_num: int,
@@ -159,6 +159,16 @@ async def get_data_version(
         
         result = await data_service.get_data_version(data_id, version_num, token)
         
+        # Map result to response model structure
+        response = {
+            "id": result["id"],
+            "version": result["version"],
+            "data": result.get("decrypted_data"),
+            "created_at": result["created_at"],
+            "created_by": result.get("created_by"),
+            "error": result.get("decrypt_error")
+        }
+        
         # Audit Log
         background_tasks.add_task(
             state_manager.log_audit_event,
@@ -172,7 +182,7 @@ async def get_data_version(
             details=f"Read version {version_num} of data {data_id}"
         )
         
-        return result
+        return response
     except Exception as e:
         logger.error(f"Error getting version {version_num} for data {data_id}: {str(e)}")
         raise HTTPException(
@@ -427,6 +437,49 @@ async def delete_data(
         raise
     except Exception as e:
         logger.error(f"Error deleting data {data_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.post("/{data_id}/rotate", status_code=status.HTTP_200_OK)
+async def rotate_data(
+    data_id: str,
+    background_tasks: BackgroundTasks,
+    token: str = Depends(get_token_from_request),
+    user_info: UserInfo = Depends(get_current_user),
+    storage_client: StorageClient = Depends(get_storage_client),
+    client_info: ClientInfo = Depends(get_client_info)
+):
+    """Trigger manual rotation for a secret"""
+    try:
+        state_manager = await get_state_manager()
+        data_service = DataService(storage_client, state_manager)
+        
+        await data_service.rotate_data(data_id, token)
+        
+        # Audit Log
+        background_tasks.add_task(
+            state_manager.log_audit_event,
+            action="rotate_secret",
+            status="success",
+            user_id=str(user_info.user_id),
+            resource_type="data",
+            resource_id=data_id,
+            ip_address=client_info.ip_address,
+            user_agent=client_info.device_info,
+            details="Manual secret rotation triggered"
+        )
+        
+        return {"status": "success", "message": "Secret rotated successfully"}
+        
+    except ValueError as e:
+         raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error rotating data {data_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

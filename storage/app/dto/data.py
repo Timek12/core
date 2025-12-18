@@ -101,7 +101,7 @@ class DataUpdateRequest(BaseModel):
     host: Optional[str] = None
     certificate: Optional[str] = None
     chain: Optional[str] = None
-
+    rotation_interval_days: Optional[int] = None
 
 class DataInternalCreate(BaseModel):
     """Internal payload coming from the server service"""
@@ -112,7 +112,7 @@ class DataInternalCreate(BaseModel):
     encrypted_value: str
     dek_id: UUID
     metadata_json: Optional[str] = None
-
+    rotation_interval_days: Optional[int] = None
 
 class DataInternalUpdate(BaseModel):
     """Internal payload for updating an existing data"""
@@ -124,6 +124,7 @@ class DataInternalUpdate(BaseModel):
     dek_id: Optional[UUID] = None
     metadata_json: Optional[str] = None
     project_id: Optional[UUID] = None
+    rotation_interval_days: Optional[int] = None
 
 
 class DataResponse(BaseModel):
@@ -134,13 +135,16 @@ class DataResponse(BaseModel):
     name: str
     description: str
     data_type: DataType
-    decrypted_data: Dict[str, Any]
+    decrypted_data: Optional[Dict[str, Any]] = None
+    encrypted_value: Optional[str] = None
     metadata: Optional[DataMetadata] = None
     version: int
     is_active: bool
     created_at: datetime
     updated_at: datetime
     project_id: Optional[UUID] = None
+    rotation_interval_days: Optional[int] = None
+    next_rotation_date: Optional[datetime] = None
 
     class Config:
         from_attributes = True

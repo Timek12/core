@@ -51,6 +51,8 @@ class DataService:
             "encrypted_value": data_item.encrypted_value,
             "dek_id": str(data_item.dek_id),
             "project_id": str(data_item.project_id) if data_item.project_id else None,
+            "rotation_interval_days": data_item.rotation_interval_days,
+            "next_rotation_date": DataService._iso_datetime(data_item.next_rotation_date),
         }
 
     @staticmethod
@@ -128,9 +130,19 @@ class DataService:
         return self._serialize_version(version)
 
     def delete_data(self, data_id: uuid.UUID, user_id: int) -> bool:
+        # Try to find by ownership first
         data_item = self.repository.get_accessible_data(data_id, user_id)
+        
+        # If not owner, check if it's a project secret (Server has already validated RBAC)
         if not data_item:
-            return False
+            data_item = self.repository.get_by_id(data_id)
+            if data_item and data_item.project_id:
+                # Allowed: Server authorized this deletion for a project secret
+                pass
+            else:
+                # Not found or not authorized
+                return False
+                
         self.repository.delete_data_for_user(data_item)
         return True
 
@@ -147,3 +159,7 @@ class DataService:
             return False
         self.repository.delete_data_admin(data_item)
         return True
+
+    def get_due_rotations(self, limit: int = 50) -> List[Dict[str, Any]]:
+        data_list = self.repository.get_due_rotations(limit)
+        return [self._serialize(data_item) for data_item in data_list]

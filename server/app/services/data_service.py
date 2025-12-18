@@ -9,13 +9,15 @@ from app.utils.redis_state import RedisStateManager
 from app.utils.data_helpers import parse_metadata_json
 from app.services.crypto_service import CryptoService
 from app.dto.data import DataCreateRequest, DataUpdateRequest, DataType
+from app.services.notification_service import NotificationService, AlertLevel
 
 logger = logging.getLogger(__name__)
 
 class DataService:
-    def __init__(self, storage_client: StorageClient = None, state_manager: RedisStateManager = None):
+    def __init__(self, storage_client: StorageClient = None, state_manager: RedisStateManager = None, notification_service: NotificationService = None):
         self.storage_client = storage_client or StorageClient()
         self.state_manager = state_manager
+        self.notification_service = notification_service or NotificationService()
         self.crypto_service = CryptoService()
 
     async def create_data(
@@ -131,6 +133,7 @@ class DataService:
             }),
             "metadata_json": json.dumps(metadata),
             "version": 1,
+            "rotation_interval_days": data.rotation_interval_days
         }
         
         result = await self.storage_client.create_data(storage_data, project_id=project_id, jwt_token=jwt_token)
@@ -490,6 +493,9 @@ class DataService:
             
             final_update_data["project_id"] = update_request.project_id
 
+        if update_request.rotation_interval_days is not None:
+             final_update_data["rotation_interval_days"] = update_request.rotation_interval_days
+
         updated = await self.storage_client.update_data(data_id, final_update_data, jwt_token)
         
         if not updated:
@@ -508,6 +514,76 @@ class DataService:
         """ Delete a data item """
         logger.info(f"Deleting data {data_id}")
         
-        result = await self.storage_client.delete_data(data_id, jwt_token)
+        return await self.storage_client.delete_data(data_id, jwt_token)
+
+    async def rotate_data(self, data_id: str, jwt_token: str) -> bool:
+        """
+        Generates a new strong random value based on the data type and creates a new version.
+        """
+        logger.info(f"Rotating data {data_id}")
         
-        return result
+        # 1. Fetch current data to know the type
+        current_data = await self.get_data(data_id, jwt_token)
+        data_type = current_data["data_type"]
+        
+        # 2. Generate new value based on type
+        import secrets
+        import string
+        
+        new_payload = {}
+        
+        if data_type == DataType.CREDENTIALS:
+            # Generate 32-char complex password
+            alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+            password = ''.join(secrets.choice(alphabet) for i in range(32))
+            new_payload["password"] = password
+            logger.info("Generated new password for credentials")
+            
+        elif data_type == DataType.API_KEY:
+            # Generate 64-char API key
+            token = secrets.token_urlsafe(48)
+            new_payload["apiKey"] = f"sk_live_{token}"
+            logger.info("Generated new API key")
+            
+        else:
+            raise ValueError(f"Rotation not supported for type {data_type}. Only Credentials and API Keys are supported.")
+            
+        # 3. Encrypt new value
+        if await self.state_manager.is_vault_sealed():
+             raise ValueError("Vault is sealed")
+             
+        master_key_hex = await self.state_manager.get_master_key()
+        if not master_key_hex:
+             raise ValueError("No master key")
+        master_key = bytes.fromhex(master_key_hex)
+        
+        dek = os.urandom(32)
+        payload_json = json.dumps(new_payload)
+        
+        data_nonce, encrypted_data_val = self.crypto_service.aesgcm_encrypt(dek, payload_json.encode())
+        dek_nonce, encrypted_dek = self.crypto_service.aesgcm_encrypt(master_key, dek)
+        
+        # 4. Store DEK
+        dek_data = {
+            "encrypted_dek": encrypted_dek.hex(),
+            "nonce": dek_nonce.hex()
+        }
+        dek_record = await self.storage_client.create_dek(dek_data, jwt_token)
+        del dek, master_key
+        
+        # 5. Update Data with new value
+        update_payload = {
+            "dek_id": str(dek_record["id"]),
+            "encrypted_value": json.dumps({
+                "nonce": data_nonce.hex(),
+                "ciphertext": encrypted_data_val.hex()
+            })
+        }
+        
+        await self.storage_client.update_data(data_id, update_payload, jwt_token)
+        
+        # 6. Send notification
+        msg = f"Secret Rotated: '{current_data['name']}' (ID: {data_id}) has been successfully rotated."
+        await self.notification_service.send_slack_notification(msg, level=AlertLevel.SUCCESS)
+        
+        return True
