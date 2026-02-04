@@ -31,7 +31,7 @@ def seed_initial_users(session: Session) -> bool:
         # Define initial users
         initial_users = [
             {
-                "email": "user1@gmail.com",
+                "email": "user1@example.com",
                 "password": "User123@",
                 "name": "Regular User",
                 "role": UserRole.USER

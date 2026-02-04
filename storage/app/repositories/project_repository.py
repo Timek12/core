@@ -123,9 +123,17 @@ class ProjectRepository:
         # 1. Delete all project members
         self.db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete()
         
-        # 2. Delete all secrets associated with the project
+        # 2. Soft-delete secrets and remove project reference
         from app.db.schema import Data
-        self.db.query(Data).filter(Data.project_id == project_id).delete()
+        from datetime import datetime, timezone
+        self.db.query(Data).filter(Data.project_id == project_id).update(
+            {
+                "is_active": False,
+                "project_id": None,
+                "updated_at": datetime.now(timezone.utc)
+            },
+            synchronize_session=False
+        )
         
         # 3. Delete the project itself
         self.db.delete(project)
